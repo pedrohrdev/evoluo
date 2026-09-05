@@ -66,5 +66,5 @@ Uma etapa só é marcada como `[x]` depois de implementada, testada, integrada a
 
   **Limitação de ambiente, documentada desde a etapa 3**: cumprimento de meta, streak, pontuação e a ordenação do ranking são computados por triggers/funções do Postgres (etapa 2), não pelo NestJS — os testes unitários (com `PrismaService` mockado) verificam que a camada de aplicação monta a consulta certa e repassa o resultado corretamente, mas não podem verificar a lógica SQL em si. Isso exigiria testes de integração contra um Postgres real rodando as migrations, que não é possível neste ambiente (sem Docker/Supabase CLI/credenciais).
 
-- [ ] **21. Polimento final**
-  Ajustes finais de conteúdo, mensagens de erro, estados vazios, revisão geral antes do lançamento.
+- [x] **21. Polimento final**
+  Ícone do app substituído pelo padrão do Next.js (gerado localmente via `app/icon.tsx`, sem asset externo, mesma marca do wordmark). Página 404 (`not-found.tsx`) personalizada com a identidade visual — antes caía na página genérica do Next.js. Revisão de conteúdo encontrou e corrigiu uma inconsistência real: o mesmo status ("participante saiu do desafio") tinha dois textos diferentes em duas telas (onboarding e perfil público); unificado em "Você saiu" — e corrigido para variar corretamente entre primeira e terceira pessoa no perfil público, que pode mostrar o desafio de qualquer usuário, não só o do próprio visitante. Revisão de mensagens de erro do backend (todas as ~35 mensagens de exceção): tom e clareza já consistentes, nenhuma mudança necessária.

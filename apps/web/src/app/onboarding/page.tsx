@@ -93,7 +93,7 @@ export default function OnboardingPage() {
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <p className="truncate font-display font-semibold text-ink">{participation.challengeName}</p>
-                      {participation.status === "inactive" ? <Badge tone="neutral">Encerrado para você</Badge> : null}
+                      {participation.status === "inactive" ? <Badge tone="neutral">Você saiu</Badge> : null}
                     </div>
                     <p className="mt-0.5 text-sm text-ink-muted">
                       Dia {dayNumber} de {participation.durationDays} · {participation.totalPoints} pts
