@@ -15,3 +15,46 @@ export function todayInSaoPaulo(referenceDate: Date = new Date()): string {
     day: '2-digit',
   }).format(referenceDate);
 }
+
+export interface DateRange {
+  periodStart: string;
+  periodEnd: string;
+}
+
+// Semana e mês seguem o calendário civil (segunda a domingo; dia 1 ao
+// último dia do mês) — nunca períodos relativos ao início do desafio
+// (CLAUDE.md seção 2 "Metas"). A aritmética roda inteira em UTC sobre a
+// data civil já resolvida por todayInSaoPaulo(), então não há risco de um
+// deslocamento de fuso mudar em que dia da semana/mês "hoje" cai.
+function toUtcDate(dateString: string): Date {
+  return new Date(`${dateString}T00:00:00Z`);
+}
+
+function toDateString(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+export function currentWeekRangeInSaoPaulo(referenceDate: Date = new Date()): DateRange {
+  const today = toUtcDate(todayInSaoPaulo(referenceDate));
+  // getUTCDay(): 0 = domingo ... 6 = sábado. (day + 6) % 7 mede a distância
+  // até a segunda-feira anterior (0 quando hoje já é segunda).
+  const daysSinceMonday = (today.getUTCDay() + 6) % 7;
+
+  const start = new Date(today);
+  start.setUTCDate(start.getUTCDate() - daysSinceMonday);
+
+  const end = new Date(start);
+  end.setUTCDate(start.getUTCDate() + 6);
+
+  return { periodStart: toDateString(start), periodEnd: toDateString(end) };
+}
+
+export function currentMonthRangeInSaoPaulo(referenceDate: Date = new Date()): DateRange {
+  const today = toUtcDate(todayInSaoPaulo(referenceDate));
+
+  const start = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1));
+  // Dia 0 do próximo mês é o último dia do mês atual.
+  const end = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + 1, 0));
+
+  return { periodStart: toDateString(start), periodEnd: toDateString(end) };
+}

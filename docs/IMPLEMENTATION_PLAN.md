@@ -37,7 +37,7 @@ Uma etapa só é marcada como `[x]` depois de implementada, testada, integrada a
 - [x] **11. Histórico diário**
   Consulta do histórico dia a dia de um participante (registros diários passados), respeitando a imutabilidade já garantida no banco.
 
-- [ ] **12. Metas semanais/mensais**
+- [x] **12. Metas semanais/mensais**
   Registro e fechamento das metas semanais e mensais (calendário civil), reutilizando o padrão já criado para as diárias, sem afetar o streak.
 
 - [ ] **13. Metas de 30/50/100/365 dias**

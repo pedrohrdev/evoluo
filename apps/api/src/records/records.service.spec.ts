@@ -1,6 +1,6 @@
 import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { GoalKind, GoalPeriod, ImportanceLevel, ParticipantStatus } from '@prisma/client';
-import { todayInSaoPaulo } from '../common/date/sao-paulo.util';
+import { currentMonthRangeInSaoPaulo, currentWeekRangeInSaoPaulo, todayInSaoPaulo } from '../common/date/sao-paulo.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { RecordsService } from './records.service';
 
@@ -8,6 +8,8 @@ describe('RecordsService', () => {
   let goalFindUnique: jest.Mock;
   let dailyRecordUpsert: jest.Mock;
   let dailyRecordFindMany: jest.Mock;
+  let weeklyRecordUpsert: jest.Mock;
+  let monthlyRecordUpsert: jest.Mock;
   let participantFindUnique: jest.Mock;
   let dayResultFindMany: jest.Mock;
   let prisma: PrismaService;
@@ -31,12 +33,16 @@ describe('RecordsService', () => {
     goalFindUnique = jest.fn();
     dailyRecordUpsert = jest.fn();
     dailyRecordFindMany = jest.fn();
+    weeklyRecordUpsert = jest.fn();
+    monthlyRecordUpsert = jest.fn();
     participantFindUnique = jest.fn();
     dayResultFindMany = jest.fn();
 
     prisma = {
       goal: { findUnique: goalFindUnique },
       dailyRecord: { upsert: dailyRecordUpsert, findMany: dailyRecordFindMany },
+      weeklyRecord: { upsert: weeklyRecordUpsert },
+      monthlyRecord: { upsert: monthlyRecordUpsert },
       challengeParticipant: { findUnique: participantFindUnique },
       dayResult: { findMany: dayResultFindMany },
     } as unknown as PrismaService;
@@ -203,6 +209,98 @@ describe('RecordsService', () => {
       await expect(service.recordToday('g1', 'u1', { actualValue: 1, actualBoolean: true })).rejects.toThrow(
         BadRequestException,
       );
+    });
+  });
+
+  describe('recordCurrentWeek', () => {
+    it('upserts a weekly record keyed by the Monday of the current civil week', async () => {
+      goalFindUnique.mockResolvedValue({
+        id: 'g1',
+        periodType: GoalPeriod.weekly,
+        challengeParticipantId: 'p1',
+        challengeParticipant: activeParticipant,
+        versions: [openHoursVersion],
+      });
+      weeklyRecordUpsert.mockResolvedValue({ id: 'wr1', completed: true, pointsAwarded: 90 });
+
+      const result = await service.recordCurrentWeek('g1', 'u1', { actualValue: 5 });
+
+      const { periodStart, periodEnd } = currentWeekRangeInSaoPaulo();
+      const start = new Date(periodStart);
+      const end = new Date(periodEnd);
+      expect(weeklyRecordUpsert).toHaveBeenCalledWith({
+        where: { goalId_periodStart: { goalId: 'g1', periodStart: start } },
+        create: {
+          goalId: 'g1',
+          goalVersionId: 'v1',
+          challengeParticipantId: 'p1',
+          periodStart: start,
+          periodEnd: end,
+          actualValue: 5,
+          actualBoolean: undefined,
+          kind: GoalKind.hours,
+          importance: ImportanceLevel.high,
+          targetValueSnapshot: 2,
+        },
+        update: {
+          goalVersionId: 'v1',
+          actualValue: 5,
+          actualBoolean: null,
+          kind: GoalKind.hours,
+          importance: ImportanceLevel.high,
+          targetValueSnapshot: 2,
+        },
+      });
+      expect(result).toEqual({ id: 'wr1', completed: true, pointsAwarded: 90 });
+    });
+
+    it('throws BadRequestException when the goal is not weekly', async () => {
+      goalFindUnique.mockResolvedValue({
+        id: 'g1',
+        periodType: GoalPeriod.daily,
+        challengeParticipant: activeParticipant,
+        versions: [openHoursVersion],
+      });
+
+      await expect(service.recordCurrentWeek('g1', 'u1', { actualValue: 1 })).rejects.toThrow(BadRequestException);
+      expect(weeklyRecordUpsert).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('recordCurrentMonth', () => {
+    it('upserts a monthly record keyed by the 1st of the current civil month', async () => {
+      goalFindUnique.mockResolvedValue({
+        id: 'g2',
+        periodType: GoalPeriod.monthly,
+        challengeParticipantId: 'p1',
+        challengeParticipant: activeParticipant,
+        versions: [openBooleanVersion],
+      });
+      monthlyRecordUpsert.mockResolvedValue({ id: 'mr1', completed: true, pointsAwarded: 80 });
+
+      await service.recordCurrentMonth('g2', 'u1', { actualBoolean: true });
+
+      const { periodStart, periodEnd } = currentMonthRangeInSaoPaulo();
+      const start = new Date(periodStart);
+      const end = new Date(periodEnd);
+      expect(monthlyRecordUpsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { goalId_periodStart: { goalId: 'g2', periodStart: start } },
+          create: expect.objectContaining({ periodStart: start, periodEnd: end, actualBoolean: true, actualValue: undefined }),
+        }),
+      );
+    });
+
+    it('throws BadRequestException when the goal is not monthly', async () => {
+      goalFindUnique.mockResolvedValue({
+        id: 'g1',
+        periodType: GoalPeriod.weekly,
+        challengeParticipant: activeParticipant,
+        versions: [openHoursVersion],
+      });
+
+      await expect(service.recordCurrentMonth('g1', 'u1', { actualValue: 1 })).rejects.toThrow(BadRequestException);
+      expect(monthlyRecordUpsert).not.toHaveBeenCalled();
     });
   });
 

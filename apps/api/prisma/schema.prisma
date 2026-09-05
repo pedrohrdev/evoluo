@@ -77,11 +77,13 @@ model ChallengeParticipant {
   totalDaysCompleted Int               @default(0) @map("total_days_completed")
   createdAt          DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  challenge    Challenge      @relation(fields: [challengeId], references: [id], onDelete: Cascade)
-  goals        Goal[]
-  dailyRecords DailyRecord[]
-  pointsLedger PointsLedger[]
-  dayResults   DayResult[]
+  challenge      Challenge       @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  goals          Goal[]
+  dailyRecords   DailyRecord[]
+  weeklyRecords  WeeklyRecord[]
+  monthlyRecords MonthlyRecord[]
+  pointsLedger   PointsLedger[]
+  dayResults     DayResult[]
 
   @@unique([challengeId, userId])
   @@map("challenge_participants")
@@ -130,6 +132,8 @@ model Goal {
   challengeParticipant ChallengeParticipant @relation(fields: [challengeParticipantId], references: [id], onDelete: Cascade)
   versions             GoalVersion[]
   dailyRecords         DailyRecord[]
+  weeklyRecords        WeeklyRecord[]
+  monthlyRecords       MonthlyRecord[]
 
   @@map("goals")
 }
@@ -150,8 +154,10 @@ model GoalVersion {
   validUntil  DateTime?       @map("valid_until") @db.Timestamptz(6)
   createdAt   DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  goal         Goal          @relation(fields: [goalId], references: [id], onDelete: Cascade)
-  dailyRecords DailyRecord[]
+  goal           Goal            @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  dailyRecords   DailyRecord[]
+  weeklyRecords  WeeklyRecord[]
+  monthlyRecords MonthlyRecord[]
 
   @@map("goal_versions")
 }
@@ -185,6 +191,63 @@ model DailyRecord {
 
   @@unique([goalId, recordDate])
   @@map("daily_records")
+}
+
+// Lançamento real de uma meta semanal, para o período (segunda a domingo,
+// calendário civil — CLAUDE.md seção 2 "Metas") ainda vigente. Mesma
+// garantia de imutabilidade/janela de edição da DailyRecord, aplicada por
+// enforce_period_record_window/compute_period_record_fields. Nunca afeta
+// streak (CLAUDE.md seção 2 "Streak").
+model WeeklyRecord {
+  id                     String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  goalId                 String          @map("goal_id") @db.Uuid
+  goalVersionId          String          @map("goal_version_id") @db.Uuid
+  challengeParticipantId String          @map("challenge_participant_id") @db.Uuid
+  periodStart            DateTime        @map("period_start") @db.Date
+  periodEnd              DateTime        @map("period_end") @db.Date
+  actualValue            Decimal?        @map("actual_value") @db.Decimal(10, 2)
+  actualBoolean          Boolean?        @map("actual_boolean")
+  kind                   GoalKind
+  importance             ImportanceLevel
+  targetValueSnapshot    Decimal?        @map("target_value_snapshot") @db.Decimal(10, 2)
+  completed              Boolean         @default(false)
+  pointsAwarded          Int             @default(0) @map("points_awarded")
+  createdAt              DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime        @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  goal                 Goal                 @relation(fields: [goalId], references: [id])
+  goalVersion          GoalVersion          @relation(fields: [goalVersionId], references: [id])
+  challengeParticipant ChallengeParticipant @relation(fields: [challengeParticipantId], references: [id], onDelete: Cascade)
+
+  @@unique([goalId, periodStart])
+  @@map("weekly_records")
+}
+
+// Lançamento real de uma meta mensal, para o período (dia 1 ao último dia
+// do mês, calendário civil) ainda vigente. Mesmo padrão da WeeklyRecord.
+model MonthlyRecord {
+  id                     String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  goalId                 String          @map("goal_id") @db.Uuid
+  goalVersionId          String          @map("goal_version_id") @db.Uuid
+  challengeParticipantId String          @map("challenge_participant_id") @db.Uuid
+  periodStart            DateTime        @map("period_start") @db.Date
+  periodEnd              DateTime        @map("period_end") @db.Date
+  actualValue            Decimal?        @map("actual_value") @db.Decimal(10, 2)
+  actualBoolean          Boolean?        @map("actual_boolean")
+  kind                   GoalKind
+  importance             ImportanceLevel
+  targetValueSnapshot    Decimal?        @map("target_value_snapshot") @db.Decimal(10, 2)
+  completed              Boolean         @default(false)
+  pointsAwarded          Int             @default(0) @map("points_awarded")
+  createdAt              DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime        @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  goal                 Goal                 @relation(fields: [goalId], references: [id])
+  goalVersion          GoalVersion          @relation(fields: [goalVersionId], references: [id])
+  challengeParticipant ChallengeParticipant @relation(fields: [challengeParticipantId], references: [id], onDelete: Cascade)
+
+  @@unique([goalId, periodStart])
+  @@map("monthly_records")
 }
 
 // Tabela de configuração de pontos por importância × período — a fonte da
