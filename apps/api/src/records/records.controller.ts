@@ -3,6 +3,7 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { SupabaseAuthGuard } from '../auth/guards/supabase-auth.guard';
 import { AuthenticatedUser } from '../auth/interfaces/authenticated-user.interface';
 import { RecordDailyGoalDto } from './dto/record-daily-goal.dto';
+import { RecordPeriodGoalDto } from './dto/record-period-goal.dto';
 import { RecordsService } from './records.service';
 
 @UseGuards(SupabaseAuthGuard)
@@ -20,6 +21,27 @@ export class RecordsController {
     @Body() dto: RecordDailyGoalDto,
   ) {
     return this.recordsService.recordToday(goalId, user.id, dto);
+  }
+
+  // Mesmo padrão de recordToday, para o período semanal vigente (segunda a
+  // domingo). Também sem parâmetro de período: é sempre o que contém hoje.
+  @Put('goals/:goalId/weekly-record')
+  recordCurrentWeek(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('goalId', ParseUUIDPipe) goalId: string,
+    @Body() dto: RecordPeriodGoalDto,
+  ) {
+    return this.recordsService.recordCurrentWeek(goalId, user.id, dto);
+  }
+
+  // Mesmo padrão, para o período mensal vigente (dia 1 ao último dia do mês).
+  @Put('goals/:goalId/monthly-record')
+  recordCurrentMonth(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('goalId', ParseUUIDPipe) goalId: string,
+    @Body() dto: RecordPeriodGoalDto,
+  ) {
+    return this.recordsService.recordCurrentMonth(goalId, user.id, dto);
   }
 
   // Histórico é público para leitura, como perfis/metas/pontos/streak

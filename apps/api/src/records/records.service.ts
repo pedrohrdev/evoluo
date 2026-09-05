@@ -1,8 +1,16 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { GoalKind, GoalPeriod, ParticipantStatus } from '@prisma/client';
-import { todayInSaoPaulo } from '../common/date/sao-paulo.util';
+import { Goal, GoalKind, GoalPeriod, GoalVersion, ParticipantStatus } from '@prisma/client';
+import { currentMonthRangeInSaoPaulo, currentWeekRangeInSaoPaulo, todayInSaoPaulo } from '../common/date/sao-paulo.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { RecordDailyGoalDto } from './dto/record-daily-goal.dto';
+import { RecordPeriodGoalDto } from './dto/record-period-goal.dto';
+
+const PERIOD_LABELS: Record<GoalPeriod, string> = {
+  [GoalPeriod.daily]: 'diárias',
+  [GoalPeriod.weekly]: 'semanais',
+  [GoalPeriod.monthly]: 'mensais',
+  [GoalPeriod.challenge]: 'de duração do desafio',
+};
 
 @Injectable()
 export class RecordsService {
@@ -14,34 +22,7 @@ export class RecordsService {
   // nunca vem do cliente: é sempre "hoje" em America/Sao_Paulo, o que já
   // impede edição retroativa por este caminho.
   async recordToday(goalId: string, userId: string, dto: RecordDailyGoalDto) {
-    const goal = await this.prisma.goal.findUnique({
-      where: { id: goalId },
-      include: {
-        challengeParticipant: true,
-        versions: { where: { validUntil: null } },
-      },
-    });
-
-    if (!goal) {
-      throw new NotFoundException('Meta não encontrada.');
-    }
-
-    if (goal.challengeParticipant.userId !== userId) {
-      throw new ForbiddenException('Você não pode registrar a meta de outro participante.');
-    }
-
-    if (goal.periodType !== GoalPeriod.daily) {
-      throw new BadRequestException('Este endpoint só registra metas diárias.');
-    }
-
-    if (goal.challengeParticipant.status !== ParticipantStatus.active) {
-      throw new ForbiddenException('Não é possível registrar metas de um desafio que você já deixou.');
-    }
-
-    const currentVersion = goal.versions[0];
-    if (!currentVersion) {
-      throw new ConflictException('Esta meta não tem uma versão vigente configurada.');
-    }
+    const { goal, currentVersion } = await this.resolveOpenGoalVersion(goalId, userId, GoalPeriod.daily);
 
     this.assertActualMatchesKind(currentVersion.kind, dto);
 
@@ -74,6 +55,109 @@ export class RecordsService {
         targetValueSnapshot: currentVersion.targetValue,
       },
     });
+  }
+
+  // Mesmo padrão de recordToday, para o período semanal vigente (segunda a
+  // domingo, calendário civil — CLAUDE.md seção 2 "Metas"). O período nunca
+  // vem do cliente: é sempre o que contém "hoje" em America/Sao_Paulo, o
+  // que já impede edição retroativa por este caminho, e
+  // enforce_period_record_window recusa qualquer tentativa fora dele
+  // mesmo assim. Metas semanais nunca afetam streak.
+  async recordCurrentWeek(goalId: string, userId: string, dto: RecordPeriodGoalDto) {
+    const { goal, currentVersion } = await this.resolveOpenGoalVersion(goalId, userId, GoalPeriod.weekly);
+
+    this.assertActualMatchesKind(currentVersion.kind, dto);
+
+    const { periodStart, periodEnd } = currentWeekRangeInSaoPaulo();
+    const start = new Date(periodStart);
+
+    return this.prisma.weeklyRecord.upsert({
+      where: { goalId_periodStart: { goalId, periodStart: start } },
+      ...this.buildPeriodRecordData(goal, currentVersion, dto, start, new Date(periodEnd)),
+    });
+  }
+
+  // Mesmo padrão de recordCurrentWeek, para o período mensal vigente (dia 1
+  // ao último dia do mês, calendário civil).
+  async recordCurrentMonth(goalId: string, userId: string, dto: RecordPeriodGoalDto) {
+    const { goal, currentVersion } = await this.resolveOpenGoalVersion(goalId, userId, GoalPeriod.monthly);
+
+    this.assertActualMatchesKind(currentVersion.kind, dto);
+
+    const { periodStart, periodEnd } = currentMonthRangeInSaoPaulo();
+    const start = new Date(periodStart);
+
+    return this.prisma.monthlyRecord.upsert({
+      where: { goalId_periodStart: { goalId, periodStart: start } },
+      ...this.buildPeriodRecordData(goal, currentVersion, dto, start, new Date(periodEnd)),
+    });
+  }
+
+  private buildPeriodRecordData(
+    goal: Goal,
+    currentVersion: GoalVersion,
+    dto: RecordPeriodGoalDto,
+    periodStart: Date,
+    periodEnd: Date,
+  ) {
+    return {
+      create: {
+        goalId: goal.id,
+        goalVersionId: currentVersion.id,
+        challengeParticipantId: goal.challengeParticipantId,
+        periodStart,
+        periodEnd,
+        actualValue: dto.actualValue,
+        actualBoolean: dto.actualBoolean,
+        // Mesmos placeholders de recordToday: os triggers
+        // compute_period_record_fields/enforce_period_record_window do
+        // banco recalculam/validam tudo a partir do goal_version_id.
+        kind: currentVersion.kind,
+        importance: currentVersion.importance,
+        targetValueSnapshot: currentVersion.targetValue,
+      },
+      update: {
+        goalVersionId: currentVersion.id,
+        actualValue: dto.actualValue ?? null,
+        actualBoolean: dto.actualBoolean ?? null,
+        kind: currentVersion.kind,
+        importance: currentVersion.importance,
+        targetValueSnapshot: currentVersion.targetValue,
+      },
+    };
+  }
+
+  private async resolveOpenGoalVersion(goalId: string, userId: string, expectedPeriodType: GoalPeriod) {
+    const goal = await this.prisma.goal.findUnique({
+      where: { id: goalId },
+      include: {
+        challengeParticipant: true,
+        versions: { where: { validUntil: null } },
+      },
+    });
+
+    if (!goal) {
+      throw new NotFoundException('Meta não encontrada.');
+    }
+
+    if (goal.challengeParticipant.userId !== userId) {
+      throw new ForbiddenException('Você não pode registrar a meta de outro participante.');
+    }
+
+    if (goal.periodType !== expectedPeriodType) {
+      throw new BadRequestException(`Este endpoint só registra metas ${PERIOD_LABELS[expectedPeriodType]}.`);
+    }
+
+    if (goal.challengeParticipant.status !== ParticipantStatus.active) {
+      throw new ForbiddenException('Não é possível registrar metas de um desafio que você já deixou.');
+    }
+
+    const currentVersion = goal.versions[0];
+    if (!currentVersion) {
+      throw new ConflictException('Esta meta não tem uma versão vigente configurada.');
+    }
+
+    return { goal, currentVersion };
   }
 
   // Histórico dia a dia (CLAUDE.md seção "Histórico" / IMPLEMENTATION_PLAN
@@ -132,7 +216,7 @@ export class RecordsService {
     }));
   }
 
-  private assertActualMatchesKind(kind: GoalKind, dto: RecordDailyGoalDto): void {
+  private assertActualMatchesKind(kind: GoalKind, dto: RecordDailyGoalDto | RecordPeriodGoalDto): void {
     if (kind === GoalKind.boolean) {
       if (dto.actualBoolean === undefined) {
         throw new BadRequestException('actualBoolean é obrigatório para metas do tipo sim/não.');
