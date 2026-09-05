@@ -46,24 +46,24 @@ export default function ProfilePage() {
       </button>
 
       <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <span className="flex size-14 items-center justify-center rounded-full bg-surface-3 font-display text-xl font-semibold text-ink">
+        <div className="flex min-w-0 items-center gap-4">
+          <span className="flex size-14 shrink-0 items-center justify-center rounded-full bg-surface-3 font-display text-xl font-semibold text-ink">
             {profile.displayName.charAt(0).toUpperCase()}
           </span>
-          <div>
-            <h1 className="font-display text-xl font-semibold text-ink">{profile.displayName}</h1>
+          <div className="min-w-0">
+            <h1 className="truncate font-display text-xl font-semibold text-ink">{profile.displayName}</h1>
             <p className="text-sm text-ink-muted">Desde {formatDateLong(profile.createdAt)}</p>
           </div>
         </div>
         {isOwn ? (
-          <Button variant="secondary" size="sm" onClick={() => setEditing(true)}>
+          <Button variant="secondary" size="sm" className="shrink-0" onClick={() => setEditing(true)}>
             <Pencil className="size-4" aria-hidden />
             Editar
           </Button>
         ) : null}
       </div>
 
-      <Surface className="mt-6 grid grid-cols-3 gap-4 p-5">
+      <Surface className="mt-6 grid grid-cols-3 gap-3 p-4 sm:gap-4 sm:p-5">
         <HeroStat label="Maior streak ativo" value={<StreakFlame value={bestStreak} />} />
         <HeroStat label="Pontos (soma)" value={totalPoints} />
         <HeroStat label="Desafios" value={profile.challenges.length} />
@@ -91,7 +91,7 @@ export default function ProfilePage() {
                       {c.totalDaysCompleted} dia(s) concluído(s) · {c.goals.length} meta(s)
                     </p>
                   </div>
-                  <StreakFlame value={c.currentStreak} size="sm" />
+                  <StreakFlame value={c.currentStreak} size="sm" className="shrink-0" />
                 </Link>
               </li>
             ))}

@@ -119,7 +119,7 @@ export default function DashboardPage() {
       </Surface>
 
       <section>
-        <div className="mb-3 flex items-center justify-between">
+        <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
           <div>
             <h2 className="font-display text-lg font-semibold text-ink">Hoje</h2>
             <p className="text-sm text-ink-muted">{completedToday}/3 metas diárias concluídas</p>

@@ -60,7 +60,7 @@ export function GoalRecordCard({
   return (
     <Surface
       className={cn(
-        "flex items-center justify-between gap-4 p-4 transition-colors",
+        "flex flex-col gap-3 p-4 transition-colors sm:flex-row sm:items-center sm:justify-between sm:gap-4",
         state === "completed" && "border-success/40 bg-success-soft",
         state === "incomplete" && "border-danger/30 bg-danger-soft",
       )}
@@ -92,7 +92,7 @@ export function GoalRecordCard({
           onClick={() => void submit({ actualBoolean: !(record?.actualBoolean ?? false) })}
           aria-pressed={record?.actualBoolean ?? false}
           className={cn(
-            "flex h-9 w-16 shrink-0 items-center justify-center rounded-full text-sm font-semibold transition-colors duration-150",
+            "flex h-10 w-full shrink-0 items-center justify-center rounded-full text-sm font-semibold transition-colors duration-150 sm:h-9 sm:w-16",
             record?.actualBoolean
               ? "bg-success text-black"
               : "bg-surface-3 text-ink-muted hover:bg-surface-2",
@@ -118,13 +118,13 @@ export function GoalRecordCard({
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             disabled={pending}
-            className="h-9 w-20 rounded-sm border border-line bg-surface-2 px-2 text-right text-sm text-ink focus:border-accent"
+            className="h-10 w-full min-w-0 flex-1 rounded-sm border border-line bg-surface-2 px-2 text-right text-sm text-ink focus:border-accent sm:h-9 sm:w-20 sm:flex-none"
             aria-label={`Valor realizado para ${version.title}`}
           />
           <button
             type="submit"
             disabled={pending || draft === ""}
-            className="flex h-9 items-center rounded-sm bg-accent px-2.5 text-sm font-medium text-accent-on transition-colors hover:bg-accent-strong disabled:opacity-40"
+            className="flex h-10 shrink-0 items-center rounded-sm bg-accent px-3 text-sm font-medium text-accent-on transition-colors hover:bg-accent-strong disabled:opacity-40 sm:h-9 sm:px-2.5"
           >
             Salvar
           </button>
