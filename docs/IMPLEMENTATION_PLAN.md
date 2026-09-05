@@ -16,7 +16,7 @@ Uma etapa só é marcada como `[x]` depois de implementada, testada, integrada a
 - [x] **4. Criação e entrada em desafios**
   Endpoints e lógica para criar um desafio (nome, descrição, duração de 30/50/100/365 dias, data de início) e para entrar em um desafio existente através do código/ID, usando as tabelas `challenges` e `challenge_participants` já existentes.
 
-- [ ] **5. Configuração das metas**
+- [x] **5. Configuração das metas**
   Endpoints e lógica para o participante configurar suas metas: as 3 diárias obrigatórias, e as opcionais (semanal, mensal, duração). Validação dos tipos (horas/quantidade/sim-não), importância, e das regras de limite (máx. 3 diárias, máx. 1 de cada periodicidade opcional) já garantidas em parte pelo banco.
 
 - [ ] **6. Registro diário das metas**
