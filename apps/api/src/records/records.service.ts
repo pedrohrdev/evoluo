@@ -200,6 +200,42 @@ export class RecordsService {
     return { goal, currentVersion };
   }
 
+  // Estado do período ainda ABERTO de cada periodicidade (etapa 15 —
+  // frontend precisa saber o que já foi registrado hoje/nesta semana/neste
+  // mês/na meta de duração para não mostrar como "não registrado" algo que
+  // já foi, ao recarregar a página). Só leitura direta das linhas já
+  // existentes, mesmo padrão de StreakService.today — nenhum cálculo novo,
+  // nenhuma regra de negócio adicional. Nunca inclui períodos fechados
+  // (esses são histórico, GET .../daily-history).
+  async getTodayState(participantId: string) {
+    const participant = await this.prisma.challengeParticipant.findUnique({
+      where: { id: participantId },
+      select: { id: true },
+    });
+
+    if (!participant) {
+      throw new NotFoundException('Participante não encontrado.');
+    }
+
+    const { periodStart: weekStart } = currentWeekRangeInSaoPaulo();
+    const { periodStart: monthStart } = currentMonthRangeInSaoPaulo();
+
+    const [daily, weekly, monthly, challenge] = await Promise.all([
+      this.prisma.dailyRecord.findMany({
+        where: { challengeParticipantId: participantId, recordDate: new Date(todayInSaoPaulo()) },
+      }),
+      this.prisma.weeklyRecord.findMany({
+        where: { challengeParticipantId: participantId, periodStart: new Date(weekStart) },
+      }),
+      this.prisma.monthlyRecord.findMany({
+        where: { challengeParticipantId: participantId, periodStart: new Date(monthStart) },
+      }),
+      this.prisma.challengeRecord.findMany({ where: { challengeParticipantId: participantId } }),
+    ]);
+
+    return { daily, weekly, monthly, challenge };
+  }
+
   // Histórico dia a dia (CLAUDE.md seção "Histórico" / IMPLEMENTATION_PLAN
   // etapa 11): só dias já FECHADOS por close_daily_period (day_results com
   // closed = true) — nunca "hoje", cujo estado tentativo já é exposto por

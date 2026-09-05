@@ -13,8 +13,11 @@ describe('RecordsService', () => {
   let dailyRecordUpsert: jest.Mock;
   let dailyRecordFindMany: jest.Mock;
   let weeklyRecordUpsert: jest.Mock;
+  let weeklyRecordFindMany: jest.Mock;
   let monthlyRecordUpsert: jest.Mock;
+  let monthlyRecordFindMany: jest.Mock;
   let challengeRecordUpsert: jest.Mock;
+  let challengeRecordFindMany: jest.Mock;
   let participantFindUnique: jest.Mock;
   let dayResultFindMany: jest.Mock;
   let prisma: PrismaService;
@@ -39,17 +42,20 @@ describe('RecordsService', () => {
     dailyRecordUpsert = jest.fn();
     dailyRecordFindMany = jest.fn();
     weeklyRecordUpsert = jest.fn();
+    weeklyRecordFindMany = jest.fn();
     monthlyRecordUpsert = jest.fn();
+    monthlyRecordFindMany = jest.fn();
     challengeRecordUpsert = jest.fn();
+    challengeRecordFindMany = jest.fn();
     participantFindUnique = jest.fn();
     dayResultFindMany = jest.fn();
 
     prisma = {
       goal: { findUnique: goalFindUnique },
       dailyRecord: { upsert: dailyRecordUpsert, findMany: dailyRecordFindMany },
-      weeklyRecord: { upsert: weeklyRecordUpsert },
-      monthlyRecord: { upsert: monthlyRecordUpsert },
-      challengeRecord: { upsert: challengeRecordUpsert },
+      weeklyRecord: { upsert: weeklyRecordUpsert, findMany: weeklyRecordFindMany },
+      monthlyRecord: { upsert: monthlyRecordUpsert, findMany: monthlyRecordFindMany },
+      challengeRecord: { upsert: challengeRecordUpsert, findMany: challengeRecordFindMany },
       challengeParticipant: { findUnique: participantFindUnique },
       dayResult: { findMany: dayResultFindMany },
     } as unknown as PrismaService;
@@ -421,6 +427,46 @@ describe('RecordsService', () => {
         BadRequestException,
       );
       expect(challengeRecordUpsert).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('getTodayState', () => {
+    it('reads the still-open period for each table, without any new computation', async () => {
+      participantFindUnique.mockResolvedValue({ id: 'p1' });
+      const dailyRows = [{ id: 'dr1' }];
+      const weeklyRows = [{ id: 'wr1' }];
+      const monthlyRows = [{ id: 'mr1' }];
+      const challengeRows = [{ id: 'cr1' }];
+      dailyRecordFindMany.mockResolvedValue(dailyRows);
+      weeklyRecordFindMany.mockResolvedValue(weeklyRows);
+      monthlyRecordFindMany.mockResolvedValue(monthlyRows);
+      challengeRecordFindMany.mockResolvedValue(challengeRows);
+
+      const result = await service.getTodayState('p1');
+
+      const today = new Date(todayInSaoPaulo());
+      const { periodStart: weekStart } = currentWeekRangeInSaoPaulo();
+      const { periodStart: monthStart } = currentMonthRangeInSaoPaulo();
+
+      expect(dailyRecordFindMany).toHaveBeenCalledWith({
+        where: { challengeParticipantId: 'p1', recordDate: today },
+      });
+      expect(weeklyRecordFindMany).toHaveBeenCalledWith({
+        where: { challengeParticipantId: 'p1', periodStart: new Date(weekStart) },
+      });
+      expect(monthlyRecordFindMany).toHaveBeenCalledWith({
+        where: { challengeParticipantId: 'p1', periodStart: new Date(monthStart) },
+      });
+      expect(challengeRecordFindMany).toHaveBeenCalledWith({ where: { challengeParticipantId: 'p1' } });
+
+      expect(result).toEqual({ daily: dailyRows, weekly: weeklyRows, monthly: monthlyRows, challenge: challengeRows });
+    });
+
+    it('throws NotFoundException when the participant does not exist', async () => {
+      participantFindUnique.mockResolvedValue(null);
+
+      await expect(service.getTodayState('missing')).rejects.toThrow(NotFoundException);
+      expect(dailyRecordFindMany).not.toHaveBeenCalled();
     });
   });
 
