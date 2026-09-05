@@ -7,6 +7,9 @@ import { RecordsService } from './records.service';
 describe('RecordsService', () => {
   let goalFindUnique: jest.Mock;
   let dailyRecordUpsert: jest.Mock;
+  let dailyRecordFindMany: jest.Mock;
+  let participantFindUnique: jest.Mock;
+  let dayResultFindMany: jest.Mock;
   let prisma: PrismaService;
   let service: RecordsService;
 
@@ -27,10 +30,15 @@ describe('RecordsService', () => {
   beforeEach(() => {
     goalFindUnique = jest.fn();
     dailyRecordUpsert = jest.fn();
+    dailyRecordFindMany = jest.fn();
+    participantFindUnique = jest.fn();
+    dayResultFindMany = jest.fn();
 
     prisma = {
       goal: { findUnique: goalFindUnique },
-      dailyRecord: { upsert: dailyRecordUpsert },
+      dailyRecord: { upsert: dailyRecordUpsert, findMany: dailyRecordFindMany },
+      challengeParticipant: { findUnique: participantFindUnique },
+      dayResult: { findMany: dayResultFindMany },
     } as unknown as PrismaService;
 
     service = new RecordsService(prisma);
@@ -195,6 +203,50 @@ describe('RecordsService', () => {
       await expect(service.recordToday('g1', 'u1', { actualValue: 1, actualBoolean: true })).rejects.toThrow(
         BadRequestException,
       );
+    });
+  });
+
+  describe('getHistory', () => {
+    it('returns only closed days, each with its matching records, most recent first', async () => {
+      participantFindUnique.mockResolvedValue({ id: 'p1' });
+      const day1 = new Date('2026-01-02');
+      const day2 = new Date('2026-01-01');
+      dayResultFindMany.mockResolvedValue([
+        { resultDate: day1, completedGoalsCount: 3, dayCompleted: true, streakAfter: 2 },
+        { resultDate: day2, completedGoalsCount: 1, dayCompleted: false, streakAfter: 0 },
+      ]);
+      const recordDay1 = { id: 'r1', recordDate: day1, completed: true, pointsAwarded: 30 };
+      dailyRecordFindMany.mockResolvedValue([recordDay1]);
+
+      const result = await service.getHistory('p1');
+
+      expect(dayResultFindMany).toHaveBeenCalledWith({
+        where: { challengeParticipantId: 'p1', closed: true },
+        orderBy: { resultDate: 'desc' },
+      });
+      expect(dailyRecordFindMany).toHaveBeenCalledWith({
+        where: { challengeParticipantId: 'p1', recordDate: { in: [day1, day2] } },
+        orderBy: { recordDate: 'desc' },
+      });
+      expect(result).toEqual([
+        { date: day1, completedGoalsCount: 3, dayCompleted: true, streakAfter: 2, records: [recordDay1] },
+        { date: day2, completedGoalsCount: 1, dayCompleted: false, streakAfter: 0, records: [] },
+      ]);
+    });
+
+    it('returns an empty list when there are no closed days yet, without querying daily_records', async () => {
+      participantFindUnique.mockResolvedValue({ id: 'p1' });
+      dayResultFindMany.mockResolvedValue([]);
+
+      await expect(service.getHistory('p1')).resolves.toEqual([]);
+      expect(dailyRecordFindMany).not.toHaveBeenCalled();
+    });
+
+    it('throws NotFoundException when the participant does not exist', async () => {
+      participantFindUnique.mockResolvedValue(null);
+
+      await expect(service.getHistory('missing')).rejects.toThrow(NotFoundException);
+      expect(dayResultFindMany).not.toHaveBeenCalled();
     });
   });
 });
