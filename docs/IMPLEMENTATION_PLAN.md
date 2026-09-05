@@ -13,7 +13,7 @@ Uma etapa só é marcada como `[x]` depois de implementada, testada, integrada a
 - [x] **3. Autenticação e usuários**
   Integração do backend (NestJS) com o Supabase Auth: cadastro, login, sessão/token, proteção de rotas autenticadas. Criação/uso do perfil (`profiles`) já modelado na etapa 2.
 
-- [ ] **4. Criação e entrada em desafios**
+- [x] **4. Criação e entrada em desafios**
   Endpoints e lógica para criar um desafio (nome, descrição, duração de 30/50/100/365 dias, data de início) e para entrar em um desafio existente através do código/ID, usando as tabelas `challenges` e `challenge_participants` já existentes.
 
 - [ ] **5. Configuração das metas**
