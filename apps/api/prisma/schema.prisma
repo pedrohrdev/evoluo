@@ -3,10 +3,10 @@
 // As tabelas entram neste arquivo conforme os módulos que as usam forem
 // implementados (etapa 3: `profiles`; etapa 4: `challenges` e
 // `challenge_participants`; etapa 5: `goals` e `goal_versions`; etapa 6:
-// `daily_records`; etapa 7: `points_config` e `points_ledger`), para não
-// antecipar funcionalidade fora do escopo de cada etapa. As demais tabelas
-// já existem no banco (ver docs/database-schema.md) mas ainda não são
-// usadas por nenhum módulo.
+// `daily_records`; etapa 7: `points_config` e `points_ledger`; etapa 8:
+// `day_results`), para não antecipar funcionalidade fora do escopo de cada
+// etapa. As demais tabelas já existem no banco (ver
+// docs/database-schema.md) mas ainda não são usadas por nenhum módulo.
 //
 // `auth.users` é gerenciada pelo Supabase Auth e não é modelada aqui — o
 // NestJS nunca escreve nela diretamente, só via Supabase Auth (SupabaseService).
@@ -81,6 +81,7 @@ model ChallengeParticipant {
   goals        Goal[]
   dailyRecords DailyRecord[]
   pointsLedger PointsLedger[]
+  dayResults   DayResult[]
 
   @@unique([challengeId, userId])
   @@map("challenge_participants")
@@ -217,4 +218,29 @@ model PointsLedger {
 
   @@unique([sourceTable, sourceRecordId])
   @@map("points_ledger")
+}
+
+// Um por participante por dia. Durante o dia em curso é atualizada de
+// forma "tentativa" a cada registro diário (trigger upsert_day_result,
+// `closed = false`) só para exibir progresso em tempo real (ex.: "2/3
+// hoje") — o streak em ChallengeParticipant.currentStreak só é atualizado
+// de fato quando close_daily_period() fecha o dia (`closed = true`),
+// nunca em tempo real, para o streak não oscilar durante o dia
+// (docs/arquitetura-tecnica.md seção 3 "Day Evaluation"). Esta etapa só
+// lê; nenhuma escrita aqui é feita pela aplicação.
+model DayResult {
+  id                     String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  challengeParticipantId String   @map("challenge_participant_id") @db.Uuid
+  resultDate             DateTime @map("result_date") @db.Date
+  completedGoalsCount    Int      @default(0) @map("completed_goals_count")
+  dayCompleted           Boolean  @default(false) @map("day_completed")
+  streakAfter            Int?     @map("streak_after")
+  closed                 Boolean  @default(false)
+  createdAt              DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  challengeParticipant ChallengeParticipant @relation(fields: [challengeParticipantId], references: [id], onDelete: Cascade)
+
+  @@unique([challengeParticipantId, resultDate])
+  @@map("day_results")
 }
