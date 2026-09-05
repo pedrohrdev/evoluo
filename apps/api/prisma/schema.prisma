@@ -3,9 +3,10 @@
 // As tabelas entram neste arquivo conforme os módulos que as usam forem
 // implementados (etapa 3: `profiles`; etapa 4: `challenges` e
 // `challenge_participants`; etapa 5: `goals` e `goal_versions`; etapa 6:
-// `daily_records`), para não antecipar funcionalidade fora do escopo de
-// cada etapa. As demais tabelas já existem no banco (ver
-// docs/database-schema.md) mas ainda não são usadas por nenhum módulo.
+// `daily_records`; etapa 7: `points_config` e `points_ledger`), para não
+// antecipar funcionalidade fora do escopo de cada etapa. As demais tabelas
+// já existem no banco (ver docs/database-schema.md) mas ainda não são
+// usadas por nenhum módulo.
 //
 // `auth.users` é gerenciada pelo Supabase Auth e não é modelada aqui — o
 // NestJS nunca escreve nela diretamente, só via Supabase Auth (SupabaseService).
@@ -76,9 +77,10 @@ model ChallengeParticipant {
   totalDaysCompleted Int               @default(0) @map("total_days_completed")
   createdAt          DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  challenge    Challenge     @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  challenge    Challenge      @relation(fields: [challengeId], references: [id], onDelete: Cascade)
   goals        Goal[]
   dailyRecords DailyRecord[]
+  pointsLedger PointsLedger[]
 
   @@unique([challengeId, userId])
   @@map("challenge_participants")
@@ -182,4 +184,37 @@ model DailyRecord {
 
   @@unique([goalId, recordDate])
   @@map("daily_records")
+}
+
+// Tabela de configuração de pontos por importância × período — a fonte da
+// verdade usada pelos triggers compute_daily_record_fields/
+// compute_period_record_fields para preencher `points_awarded`. Só
+// leitura: trocar a escala é um UPDATE nesta tabela, nunca uma mudança de
+// código (CLAUDE.md seção 2 "Pontos").
+model PointsConfig {
+  importance ImportanceLevel
+  periodType GoalPeriod      @map("period_type")
+  points     Int
+
+  @@id([importance, periodType])
+  @@map("points_config")
+}
+
+// Lançamento append-only de pontos — a trilha de auditoria de onde veio
+// cada ponto. Gravado exclusivamente pelas funções de fechamento
+// (security definer, etapa 8+); esta etapa só lê. `sourceTable` é `text`
+// no banco (não um enum real), então fica como String aqui também.
+model PointsLedger {
+  id                     String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  challengeParticipantId String   @map("challenge_participant_id") @db.Uuid
+  sourceTable            String   @map("source_table")
+  sourceRecordId         String   @map("source_record_id") @db.Uuid
+  points                 Int
+  awardedForDate         DateTime @map("awarded_for_date") @db.Date
+  createdAt              DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  challengeParticipant ChallengeParticipant @relation(fields: [challengeParticipantId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceTable, sourceRecordId])
+  @@map("points_ledger")
 }

@@ -22,7 +22,7 @@ Uma etapa só é marcada como `[x]` depois de implementada, testada, integrada a
 - [x] **6. Registro diário das metas**
   Endpoints e lógica para o participante lançar o valor realizado de cada meta diária no dia vigente, respeitando a janela de edição (só o dia de hoje) e sem permitir edição retroativa.
 
-- [ ] **7. Sistema de pontos**
+- [x] **7. Sistema de pontos**
   Exposição/consumo do cálculo de pontos já feito pelo banco (`points_config`, `points_awarded`, `points_ledger`): exibição de pontos por registro e pontos totais do participante, sem duplicar a lógica de cálculo no backend.
 
 - [ ] **8. Streak**

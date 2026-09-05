@@ -4,6 +4,7 @@ import { AuthModule } from './auth/auth.module';
 import { ChallengesModule } from './challenges/challenges.module';
 import { validateEnv } from './config/env.validation';
 import { GoalsModule } from './goals/goals.module';
+import { PointsModule } from './points/points.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ProfilesModule } from './profiles/profiles.module';
 import { RecordsModule } from './records/records.module';
@@ -22,6 +23,7 @@ import { SupabaseModule } from './supabase/supabase.module';
     ChallengesModule,
     GoalsModule,
     RecordsModule,
+    PointsModule,
   ],
 })
 export class AppModule {}
