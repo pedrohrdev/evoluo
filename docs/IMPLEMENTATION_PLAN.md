@@ -50,10 +50,10 @@ Uma etapa só é marcada como `[x]` depois de implementada, testada, integrada a
   Como não havia nenhum frontend ainda, esta etapa passou a cobrir de uma vez o que as etapas 15 ("Dashboard") e 16 ("UX/UI e simplificação") do plano original descreviam separadamente: fundação do frontend (`apps/web`, Next.js App Router), design system próprio (cores, tipografia, componentes, sons), e o fluxo navegável completo — login/cadastro, criar/entrar em desafio, configurar as 3 metas diárias obrigatórias, dashboard, registro de metas, streak, ranking, histórico, análises e perfil público. Decisão registrada e confirmada com o usuário antes de codificar.
 
 - [ ] **16. UX/UI e simplificação (refinamento adicional)**
-  Passada extra de consistência/polimento sobre as telas da etapa 15, depois que a etapa 17 (responsividade) e eventuais novas telas existirem — a identidade visual e os fluxos principais já foram estabelecidos na etapa 15.
+  Passada extra de consistência/polimento sobre as telas das etapas 15 e 17 — a identidade visual e os fluxos principais já foram estabelecidos na etapa 15, e a responsividade na etapa 17.
 
-- [ ] **17. Responsividade/mobile**
-  Ajustes de layout para uso confortável em telas pequenas/mobile.
+- [x] **17. Responsividade/mobile**
+  Ajustes de layout para uso confortável em telas pequenas/mobile: barra de navegação inferior fixa no lugar do menu de topo, cards de meta/ranking/histórico com empilhamento e truncamento seguros, modais com altura máxima e rolagem interna, filtros de análises roláveis horizontalmente em vez de quebrar o layout.
 
 - [ ] **18. Performance**
   Otimizações de consulta, cache (quando justificado por volume real) e revisão de índices, conforme apontado em `docs/arquitetura-tecnica.md` seção 7.

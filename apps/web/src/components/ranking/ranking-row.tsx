@@ -24,13 +24,13 @@ export function RankingRow({ entry, highlight }: { entry: RankingEntry; highligh
       <Link
         href={`/profiles/${entry.userId}`}
         className={cn(
-          "flex items-center gap-3 rounded-md px-3 py-2.5 transition-colors hover:bg-surface-2",
+          "flex items-center gap-2 rounded-md px-2.5 py-2.5 transition-colors hover:bg-surface-2 sm:gap-3 sm:px-3",
           highlight && "bg-accent-soft",
         )}
       >
         <span
           className={cn(
-            "w-6 shrink-0 text-center font-display text-sm font-semibold tabular-nums",
+            "w-5 shrink-0 text-center font-display text-sm font-semibold tabular-nums sm:w-6",
             entry.position <= 3 ? "text-accent" : "text-ink-faint",
           )}
         >
@@ -42,8 +42,11 @@ export function RankingRow({ entry, highlight }: { entry: RankingEntry; highligh
         <span className="min-w-0 flex-1 truncate text-sm font-medium text-ink">
           {profile?.displayName ?? "…"}
         </span>
-        <StreakFlame value={entry.currentStreak} size="sm" />
-        <span className="w-16 shrink-0 text-right text-sm tabular-nums text-ink-muted">{entry.totalPoints} pts</span>
+        <StreakFlame value={entry.currentStreak} size="sm" className="shrink-0" />
+        <span className="w-12 shrink-0 text-right text-sm tabular-nums text-ink-muted sm:w-16">
+          {entry.totalPoints}
+          <span className="hidden sm:inline"> pts</span>
+        </span>
       </Link>
     </li>
   );

@@ -86,18 +86,18 @@ export default function GoalsSetupPage() {
         </div>
       </section>
 
-      <div className="mt-8 flex items-center justify-between rounded-md border border-line bg-surface-1 px-4 py-3.5">
+      <div className="mt-8 flex flex-col gap-3 rounded-md border border-line bg-surface-1 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2 text-sm">
           {dailyComplete ? (
             <>
-              <CheckCircle2 className="size-4 text-success" aria-hidden />
+              <CheckCircle2 className="size-4 shrink-0 text-success" aria-hidden />
               <span className="text-ink">Metas diárias configuradas.</span>
             </>
           ) : (
             <span className="text-ink-muted">Faltam {3 - daily.length} meta(s) diária(s).</span>
           )}
         </div>
-        <Button disabled={!dailyComplete} onClick={() => router.push(`/c/${challengeId}`)}>
+        <Button disabled={!dailyComplete} onClick={() => router.push(`/c/${challengeId}`)} className="w-full sm:w-auto">
           Ir para o painel
         </Button>
       </div>

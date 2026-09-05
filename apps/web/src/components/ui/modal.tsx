@@ -25,13 +25,13 @@ export function Modal({
         <Dialog.Overlay className="fixed inset-0 z-40 bg-black/60 data-[state=open]:animate-[overlay-in_180ms_ease-out]" />
         <Dialog.Content
           className={cn(
-            "fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2",
+            "fixed left-1/2 top-1/2 z-50 flex max-h-[85vh] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 flex-col",
             "rounded-lg border border-line bg-surface-2 p-6 shadow-[0_8px_24px_-8px_rgb(0_0_0/0.55)]",
             "data-[state=open]:animate-[modal-in_180ms_ease-out]",
             className,
           )}
         >
-          <div className="flex items-start justify-between gap-4">
+          <div className="flex shrink-0 items-start justify-between gap-4">
             <div>
               <Dialog.Title className="font-display text-lg font-semibold text-ink">{title}</Dialog.Title>
               {description ? (
@@ -45,7 +45,10 @@ export function Modal({
               <X className="size-4" />
             </Dialog.Close>
           </div>
-          <div className="mt-4">{children}</div>
+          {/* overflow-y-auto: em telas baixas (celular deitado, formulários
+              com vários campos) o conteúdo rola em vez de estourar a
+              viewport (item 17). */}
+          <div className="mt-4 overflow-y-auto">{children}</div>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

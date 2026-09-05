@@ -54,16 +54,16 @@ export default function OnboardingPage() {
         </button>
       </header>
 
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <h1 className="font-display text-2xl font-semibold text-ink">Seus desafios</h1>
-        <div className="flex gap-2">
+        <div className="grid grid-cols-2 gap-2 sm:flex">
           <Button variant="secondary" size="sm" onClick={() => setJoinOpen(true)}>
             <Users className="size-4" aria-hidden />
-            Entrar com código
+            Entrar
           </Button>
           <Button size="sm" onClick={() => setCreateOpen(true)}>
             <Plus className="size-4" aria-hidden />
-            Criar desafio
+            Criar
           </Button>
         </div>
       </div>
@@ -99,7 +99,7 @@ export default function OnboardingPage() {
                       Dia {dayNumber} de {participation.durationDays} · {participation.totalPoints} pts
                     </p>
                   </div>
-                  <StreakFlame value={participation.currentStreak} />
+                  <StreakFlame value={participation.currentStreak} className="shrink-0" />
                 </Surface>
               </li>
             );

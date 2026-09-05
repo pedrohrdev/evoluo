@@ -50,25 +50,25 @@ export default function HistoryPage() {
           {days.map((day) => (
             <li key={day.date}>
               <Surface className="p-4">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <p className="font-medium text-ink">{formatDateLong(day.date)}</p>
-                  <Badge tone={day.dayCompleted ? "success" : "neutral"}>
+                  <Badge tone={day.dayCompleted ? "success" : "neutral"} className="shrink-0">
                     {day.completedGoalsCount}/3 {day.dayCompleted ? "· dia concluído" : ""}
                   </Badge>
                 </div>
                 {day.records.length > 0 ? (
                   <ul className="mt-3 flex flex-col gap-1.5">
                     {day.records.map((record) => (
-                      <li key={record.id} className="flex items-center justify-between text-sm">
-                        <span className="flex items-center gap-2 text-ink-muted">
+                      <li key={record.id} className="flex items-center justify-between gap-3 text-sm">
+                        <span className="flex min-w-0 items-center gap-2 text-ink-muted">
                           {record.completed ? (
-                            <Check className="size-3.5 text-success" aria-hidden />
+                            <Check className="size-3.5 shrink-0 text-success" aria-hidden />
                           ) : (
-                            <X className="size-3.5 text-danger" aria-hidden />
+                            <X className="size-3.5 shrink-0 text-danger" aria-hidden />
                           )}
-                          {titleByGoal.get(record.goalId) ?? "Meta"}
+                          <span className="truncate">{titleByGoal.get(record.goalId) ?? "Meta"}</span>
                         </span>
-                        <span className="tabular-nums text-ink-faint">
+                        <span className="shrink-0 tabular-nums text-ink-faint">
                           {record.kind === "boolean"
                             ? record.actualBoolean
                               ? "sim"
