@@ -6,6 +6,7 @@ import { validateEnv } from './config/env.validation';
 import { GoalsModule } from './goals/goals.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ProfilesModule } from './profiles/profiles.module';
+import { RecordsModule } from './records/records.module';
 import { SupabaseModule } from './supabase/supabase.module';
 
 @Module({
@@ -20,6 +21,7 @@ import { SupabaseModule } from './supabase/supabase.module';
     ProfilesModule,
     ChallengesModule,
     GoalsModule,
+    RecordsModule,
   ],
 })
 export class AppModule {}

@@ -19,7 +19,7 @@ Uma etapa só é marcada como `[x]` depois de implementada, testada, integrada a
 - [x] **5. Configuração das metas**
   Endpoints e lógica para o participante configurar suas metas: as 3 diárias obrigatórias, e as opcionais (semanal, mensal, duração). Validação dos tipos (horas/quantidade/sim-não), importância, e das regras de limite (máx. 3 diárias, máx. 1 de cada periodicidade opcional) já garantidas em parte pelo banco.
 
-- [ ] **6. Registro diário das metas**
+- [x] **6. Registro diário das metas**
   Endpoints e lógica para o participante lançar o valor realizado de cada meta diária no dia vigente, respeitando a janela de edição (só o dia de hoje) e sem permitir edição retroativa.
 
 - [ ] **7. Sistema de pontos**
