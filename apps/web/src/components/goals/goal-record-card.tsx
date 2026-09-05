@@ -8,11 +8,10 @@ import { ApiError } from "@/lib/api/client";
 import { RECORD_FN } from "@/lib/api/record-router";
 import type { Goal, RecordEntry } from "@/lib/api/types";
 import { cn } from "@/lib/cn";
+import { IMPORTANCE_LABEL } from "@/lib/domain/labels";
 import { formatValueForKind } from "@/lib/format/format";
 import { useSound } from "@/lib/sounds/sound-context";
 import { useToast } from "@/lib/toast/toast-context";
-
-const IMPORTANCE_LABEL: Record<string, string> = { low: "Baixa", medium: "Média", high: "Alta" };
 
 type GoalState = "not-started" | "completed" | "incomplete";
 
@@ -62,7 +61,12 @@ export function GoalRecordCard({
       className={cn(
         "flex flex-col gap-3 p-4 transition-colors sm:flex-row sm:items-center sm:justify-between sm:gap-4",
         state === "completed" && "border-success/40 bg-success-soft",
-        state === "incomplete" && "border-danger/30 bg-danger-soft",
+        // "incomplete" é só "registrado abaixo do alvo até agora" — o
+        // registro de hoje ainda pode ser editado (upsert idempotente), não
+        // é uma falha definitiva. Usa o acento (energia/em andamento), não
+        // vermelho — vermelho fica só para erro de verdade e para o
+        // "não concluído" definitivo do histórico (dia já fechado).
+        state === "incomplete" && "border-accent/30 bg-accent-soft",
       )}
     >
       <div className="min-w-0 flex-1">
@@ -70,7 +74,10 @@ export function GoalRecordCard({
           {state === "completed" ? (
             <Check className="size-4 shrink-0 text-success" aria-hidden />
           ) : (
-            <CircleDot className="size-4 shrink-0 text-ink-faint" aria-hidden />
+            <CircleDot
+              className={cn("size-4 shrink-0", state === "incomplete" ? "text-accent" : "text-ink-faint")}
+              aria-hidden
+            />
           )}
           <p className="truncate font-medium text-ink">{version.title}</p>
         </div>

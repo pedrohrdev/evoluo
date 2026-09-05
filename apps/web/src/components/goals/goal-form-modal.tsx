@@ -7,20 +7,21 @@ import { Modal } from "@/components/ui/modal";
 import { ApiError } from "@/lib/api/client";
 import { createGoal, updateGoalVersion, type GoalVersionInput } from "@/lib/api/goals";
 import type { Goal, GoalKind, GoalPeriod, Importance } from "@/lib/api/types";
+import { GOAL_KIND_LABEL, IMPORTANCE_LABEL } from "@/lib/domain/labels";
 import { Segmented } from "./segmented";
 
-const KIND_OPTIONS: { value: GoalKind; label: string }[] = [
-  { value: "hours", label: "Horas" },
-  { value: "quantity", label: "Quantidade" },
-  { value: "boolean", label: "Sim/não" },
-];
+const KIND_OPTIONS = (Object.entries(GOAL_KIND_LABEL) as [GoalKind, string][]).map(([value, label]) => ({
+  value,
+  label,
+}));
 
-const IMPORTANCE_OPTIONS: { value: Importance; label: string }[] = [
-  { value: "low", label: "Baixa" },
-  { value: "medium", label: "Média" },
-  { value: "high", label: "Alta" },
-];
+const IMPORTANCE_OPTIONS = (Object.entries(IMPORTANCE_LABEL) as [Importance, string][]).map(([value, label]) => ({
+  value,
+  label,
+}));
 
+// Fraseado próprio do título do modal (frase completa), diferente do rótulo
+// curto usado em badges (GOAL_PERIOD_LABEL) — mantido local de propósito.
 const PERIOD_LABEL: Record<GoalPeriod, string> = {
   daily: "Meta diária",
   weekly: "Meta semanal",

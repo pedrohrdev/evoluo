@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { BarChart3 } from "lucide-react";
 import { useState } from "react";
 import { GoalAnalyticsCard } from "@/components/analytics/goal-analytics-card";
+import { PageHeader } from "@/components/layout/page-header";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/feedback";
 import { getParticipantAnalytics } from "@/lib/api/analytics";
@@ -33,13 +34,11 @@ export default function AnalyticsPage() {
 
   return (
     <div className="mx-auto max-w-3xl">
-      <div className="mb-6 flex items-center gap-2">
-        <BarChart3 className="size-5 text-accent" aria-hidden />
-        <div>
-          <h1 className="font-display text-2xl font-semibold text-ink">Análises</h1>
-          <p className="text-sm text-ink-muted">Valores reais registrados, mesmo quando a meta não foi concluída.</p>
-        </div>
-      </div>
+      <PageHeader
+        icon={BarChart3}
+        title="Análises"
+        description="Valores reais registrados, mesmo quando a meta não foi concluída."
+      />
 
       <Tabs value={filter} onValueChange={(v) => setFilter(v as GoalPeriod | "all")} className="mb-5">
         <TabsList>

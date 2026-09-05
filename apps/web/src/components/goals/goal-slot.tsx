@@ -2,10 +2,8 @@ import { Pencil, Plus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Surface } from "@/components/ui/surface";
 import type { Goal } from "@/lib/api/types";
+import { GOAL_KIND_LABEL, IMPORTANCE_LABEL } from "@/lib/domain/labels";
 import { formatValueForKind } from "@/lib/format/format";
-
-const IMPORTANCE_LABEL: Record<string, string> = { low: "Baixa", medium: "Média", high: "Alta" };
-const KIND_LABEL: Record<string, string> = { hours: "Horas", quantity: "Quantidade", boolean: "Sim/não" };
 
 export function GoalSlot({
   goal,
@@ -40,7 +38,7 @@ export function GoalSlot({
       <div className="min-w-0">
         <p className="truncate font-medium text-ink">{v.title}</p>
         <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-ink-muted">
-          <Badge tone="neutral">{KIND_LABEL[v.kind]}</Badge>
+          <Badge tone="neutral">{GOAL_KIND_LABEL[v.kind]}</Badge>
           <Badge tone="neutral">{IMPORTANCE_LABEL[v.importance]}</Badge>
           {v.kind !== "boolean" ? <span>alvo: {formatValueForKind(v.kind, v.targetValue)}</span> : null}
         </div>
