@@ -85,7 +85,9 @@ export default function ProfilePage() {
                     <div className="flex items-center gap-2">
                       <Swords className="size-4 shrink-0 text-ink-faint" aria-hidden />
                       <p className="truncate font-medium text-ink">{c.challengeName}</p>
-                      {c.status === "inactive" ? <Badge tone="neutral">saiu</Badge> : null}
+                      {c.status === "inactive" ? (
+                        <Badge tone="neutral">{isOwn ? "Você saiu" : "Saiu"}</Badge>
+                      ) : null}
                     </div>
                     <p className="mt-0.5 pl-6 text-xs text-ink-muted">
                       {c.totalDaysCompleted} dia(s) concluído(s) · {c.goals.length} meta(s)
