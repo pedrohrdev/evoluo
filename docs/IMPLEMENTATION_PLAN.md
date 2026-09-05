@@ -40,7 +40,7 @@ Uma etapa só é marcada como `[x]` depois de implementada, testada, integrada a
 - [x] **12. Metas semanais/mensais**
   Registro e fechamento das metas semanais e mensais (calendário civil), reutilizando o padrão já criado para as diárias, sem afetar o streak.
 
-- [ ] **13. Metas de 30/50/100/365 dias**
+- [x] **13. Metas de 30/50/100/365 dias**
   Registro e fechamento da meta de duração do desafio, incluindo o cálculo do valor-alvo ajustado para quem entra com o desafio já iniciado (dias restantes a partir da data de entrada).
 
 - [ ] **14. Sistema de análises**

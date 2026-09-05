@@ -30,7 +30,11 @@ function toUtcDate(dateString: string): Date {
   return new Date(`${dateString}T00:00:00Z`);
 }
 
-function toDateString(date: Date): string {
+// Exportada para uso com colunas `date` puras (sem hora) já lidas do banco,
+// como `challenges.end_date` — nunca formatar essas colunas com
+// todayInSaoPaulo, que aplica um fuso e deslocaria o dia (meia-noite UTC
+// vira 21h do dia anterior em America/Sao_Paulo).
+export function toDateString(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
 

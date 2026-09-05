@@ -77,13 +77,14 @@ model ChallengeParticipant {
   totalDaysCompleted Int               @default(0) @map("total_days_completed")
   createdAt          DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  challenge      Challenge       @relation(fields: [challengeId], references: [id], onDelete: Cascade)
-  goals          Goal[]
-  dailyRecords   DailyRecord[]
-  weeklyRecords  WeeklyRecord[]
-  monthlyRecords MonthlyRecord[]
-  pointsLedger   PointsLedger[]
-  dayResults     DayResult[]
+  challenge        Challenge         @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  goals            Goal[]
+  dailyRecords     DailyRecord[]
+  weeklyRecords    WeeklyRecord[]
+  monthlyRecords   MonthlyRecord[]
+  challengeRecords ChallengeRecord[]
+  pointsLedger     PointsLedger[]
+  dayResults       DayResult[]
 
   @@unique([challengeId, userId])
   @@map("challenge_participants")
@@ -134,6 +135,7 @@ model Goal {
   dailyRecords         DailyRecord[]
   weeklyRecords        WeeklyRecord[]
   monthlyRecords       MonthlyRecord[]
+  challengeRecords     ChallengeRecord[]
 
   @@map("goals")
 }
@@ -154,10 +156,11 @@ model GoalVersion {
   validUntil  DateTime?       @map("valid_until") @db.Timestamptz(6)
   createdAt   DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  goal           Goal            @relation(fields: [goalId], references: [id], onDelete: Cascade)
-  dailyRecords   DailyRecord[]
-  weeklyRecords  WeeklyRecord[]
-  monthlyRecords MonthlyRecord[]
+  goal             Goal              @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  dailyRecords     DailyRecord[]
+  weeklyRecords    WeeklyRecord[]
+  monthlyRecords   MonthlyRecord[]
+  challengeRecords ChallengeRecord[]
 
   @@map("goal_versions")
 }
@@ -248,6 +251,38 @@ model MonthlyRecord {
 
   @@unique([goalId, periodStart])
   @@map("monthly_records")
+}
+
+// Lançamento real da meta de duração do desafio. Diferente de
+// Weekly/MonthlyRecord, o período não é "o vigente agora": é fixo por toda
+// a vida da meta — periodStart é a data de entrada do participante (não a
+// data de início do desafio) e periodEnd é o fim do desafio, calculado uma
+// única vez no primeiro registro (CLAUDE.md seção 2 "Metas": quem entra no
+// dia 10 de um desafio de 30 dias tem uma meta de duração de 20 dias, não
+// de 30). Por isso a unicidade aqui é só em goalId — só existe um período
+// possível por meta de duração (RecordsService.recordCurrentChallenge).
+model ChallengeRecord {
+  id                     String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  goalId                 String          @unique @map("goal_id") @db.Uuid
+  goalVersionId          String          @map("goal_version_id") @db.Uuid
+  challengeParticipantId String          @map("challenge_participant_id") @db.Uuid
+  periodStart            DateTime        @map("period_start") @db.Date
+  periodEnd              DateTime        @map("period_end") @db.Date
+  actualValue            Decimal?        @map("actual_value") @db.Decimal(10, 2)
+  actualBoolean          Boolean?        @map("actual_boolean")
+  kind                   GoalKind
+  importance             ImportanceLevel
+  targetValueSnapshot    Decimal?        @map("target_value_snapshot") @db.Decimal(10, 2)
+  completed              Boolean         @default(false)
+  pointsAwarded          Int             @default(0) @map("points_awarded")
+  createdAt              DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime        @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  goal                 Goal                 @relation(fields: [goalId], references: [id])
+  goalVersion          GoalVersion          @relation(fields: [goalVersionId], references: [id])
+  challengeParticipant ChallengeParticipant @relation(fields: [challengeParticipantId], references: [id], onDelete: Cascade)
+
+  @@map("challenge_records")
 }
 
 // Tabela de configuração de pontos por importância × período — a fonte da
