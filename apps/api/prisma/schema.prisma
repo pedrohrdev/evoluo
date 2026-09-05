@@ -2,9 +2,10 @@
 //
 // As tabelas entram neste arquivo conforme os módulos que as usam forem
 // implementados (etapa 3: `profiles`; etapa 4: `challenges` e
-// `challenge_participants`), para não antecipar funcionalidade fora do
-// escopo de cada etapa. As demais tabelas já existem no banco (ver
-// docs/database-schema.md) mas ainda não são usadas por nenhum módulo.
+// `challenge_participants`; etapa 5: `goals` e `goal_versions`), para não
+// antecipar funcionalidade fora do escopo de cada etapa. As demais tabelas
+// já existem no banco (ver docs/database-schema.md) mas ainda não são
+// usadas por nenhum módulo.
 //
 // `auth.users` é gerenciada pelo Supabase Auth e não é modelada aqui — o
 // NestJS nunca escreve nela diretamente, só via Supabase Auth (SupabaseService).
@@ -47,12 +48,12 @@ model Challenge {
   // gravada pela aplicação. `dbgenerated()` sem argumento diz ao Prisma para
   // omitir esta coluna do INSERT/UPDATE e ler o valor calculado de volta via
   // RETURNING.
-  endDate   DateTime @default(dbgenerated()) @map("end_date") @db.Date
-  createdBy String   @map("created_by") @db.Uuid
+  endDate      DateTime @default(dbgenerated()) @map("end_date") @db.Date
+  createdBy    String   @map("created_by") @db.Uuid
   // Gerado por `generate_join_code()` no banco — a aplicação nunca gera nem
   // sobrescreve o código, só lê o valor criado pelo default da coluna.
-  joinCode  String   @unique @default(dbgenerated("generate_join_code()")) @map("join_code")
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  joinCode     String   @unique @default(dbgenerated("generate_join_code()")) @map("join_code")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
   participants ChallengeParticipant[]
 
@@ -76,7 +77,75 @@ model ChallengeParticipant {
   createdAt          DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
 
   challenge Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  goals     Goal[]
 
   @@unique([challengeId, userId])
   @@map("challenge_participants")
+}
+
+// Tipo da meta: como o valor realizado é interpretado e comparado ao alvo
+// (ver enum `goal_kind` em supabase/migrations/20260905090100_enums.sql).
+enum GoalKind {
+  hours
+  quantity
+  boolean
+
+  @@map("goal_kind")
+}
+
+// Periodicidade da meta. "challenge" é a meta de longo prazo cujo período é
+// a duração inteira do desafio (ver enum `goal_period`).
+enum GoalPeriod {
+  daily
+  weekly
+  monthly
+  challenge
+
+  @@map("goal_period")
+}
+
+// Importância da meta, chave de `points_config` (etapas futuras de
+// pontuação — ver enum `importance_level`).
+enum ImportanceLevel {
+  low
+  medium
+  high
+
+  @@map("importance_level")
+}
+
+// Identidade estável da meta (a quem pertence, qual periodicidade). O
+// conteúdo (tipo, importância, valor-alvo, título) vive em `GoalVersion` —
+// ver docs/arquitetura-tecnica.md seção 4. `Goal` nunca é editada in-place.
+model Goal {
+  id                     String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  challengeParticipantId String     @map("challenge_participant_id") @db.Uuid
+  periodType             GoalPeriod @map("period_type")
+  createdAt              DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  challengeParticipant ChallengeParticipant @relation(fields: [challengeParticipantId], references: [id], onDelete: Cascade)
+  versions             GoalVersion[]
+
+  @@map("goals")
+}
+
+// Conteúdo da meta em cada momento — append-only por design (triggers
+// `prevent_goal_version_mutation`/`prevent_goal_version_delete` no banco
+// bloqueiam qualquer alteração de conteúdo ou apagamento). Editar uma meta
+// = fechar a versão vigente (`validUntil`) e abrir uma nova, nunca UPDATE
+// no conteúdo de uma versão existente — ver GoalsService.setVersion().
+model GoalVersion {
+  id          String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  goalId      String          @map("goal_id") @db.Uuid
+  kind        GoalKind
+  importance  ImportanceLevel
+  title       String
+  targetValue Decimal?        @map("target_value") @db.Decimal(10, 2)
+  validFrom   DateTime        @default(now()) @map("valid_from") @db.Timestamptz(6)
+  validUntil  DateTime?       @map("valid_until") @db.Timestamptz(6)
+  createdAt   DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  goal Goal @relation(fields: [goalId], references: [id], onDelete: Cascade)
+
+  @@map("goal_versions")
 }

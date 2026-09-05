@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { AuthModule } from './auth/auth.module';
 import { ChallengesModule } from './challenges/challenges.module';
 import { validateEnv } from './config/env.validation';
+import { GoalsModule } from './goals/goals.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ProfilesModule } from './profiles/profiles.module';
 import { SupabaseModule } from './supabase/supabase.module';
@@ -18,6 +19,7 @@ import { SupabaseModule } from './supabase/supabase.module';
     AuthModule,
     ProfilesModule,
     ChallengesModule,
+    GoalsModule,
   ],
 })
 export class AppModule {}
