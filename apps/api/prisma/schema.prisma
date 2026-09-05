@@ -2,10 +2,10 @@
 //
 // As tabelas entram neste arquivo conforme os módulos que as usam forem
 // implementados (etapa 3: `profiles`; etapa 4: `challenges` e
-// `challenge_participants`; etapa 5: `goals` e `goal_versions`), para não
-// antecipar funcionalidade fora do escopo de cada etapa. As demais tabelas
-// já existem no banco (ver docs/database-schema.md) mas ainda não são
-// usadas por nenhum módulo.
+// `challenge_participants`; etapa 5: `goals` e `goal_versions`; etapa 6:
+// `daily_records`), para não antecipar funcionalidade fora do escopo de
+// cada etapa. As demais tabelas já existem no banco (ver
+// docs/database-schema.md) mas ainda não são usadas por nenhum módulo.
 //
 // `auth.users` é gerenciada pelo Supabase Auth e não é modelada aqui — o
 // NestJS nunca escreve nela diretamente, só via Supabase Auth (SupabaseService).
@@ -76,8 +76,9 @@ model ChallengeParticipant {
   totalDaysCompleted Int               @default(0) @map("total_days_completed")
   createdAt          DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  challenge Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
-  goals     Goal[]
+  challenge    Challenge     @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  goals        Goal[]
+  dailyRecords DailyRecord[]
 
   @@unique([challengeId, userId])
   @@map("challenge_participants")
@@ -125,6 +126,7 @@ model Goal {
 
   challengeParticipant ChallengeParticipant @relation(fields: [challengeParticipantId], references: [id], onDelete: Cascade)
   versions             GoalVersion[]
+  dailyRecords         DailyRecord[]
 
   @@map("goals")
 }
@@ -145,7 +147,39 @@ model GoalVersion {
   validUntil  DateTime?       @map("valid_until") @db.Timestamptz(6)
   createdAt   DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  goal Goal @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  goal         Goal          @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  dailyRecords DailyRecord[]
 
   @@map("goal_versions")
+}
+
+// Um lançamento real de uma meta diária numa data. `completed` e
+// `pointsAwarded` nunca são calculados pela aplicação — os triggers
+// `compute_daily_record_fields`/`enforce_daily_record_window` do banco
+// sobrescrevem esses campos e bloqueiam qualquer escrita fora do dia
+// vigente (fuso America/Sao_Paulo). A aplicação nunca envia uma
+// `recordDate` vinda do cliente — sempre "hoje", o que já torna a edição
+// retroativa inexpressável por este caminho (RecordsService.recordToday).
+model DailyRecord {
+  id                     String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  goalId                 String          @map("goal_id") @db.Uuid
+  goalVersionId          String          @map("goal_version_id") @db.Uuid
+  challengeParticipantId String          @map("challenge_participant_id") @db.Uuid
+  recordDate             DateTime        @map("record_date") @db.Date
+  actualValue            Decimal?        @map("actual_value") @db.Decimal(10, 2)
+  actualBoolean          Boolean?        @map("actual_boolean")
+  kind                   GoalKind
+  importance             ImportanceLevel
+  targetValueSnapshot    Decimal?        @map("target_value_snapshot") @db.Decimal(10, 2)
+  completed              Boolean         @default(false)
+  pointsAwarded          Int             @default(0) @map("points_awarded")
+  createdAt              DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime        @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  goal                 Goal                 @relation(fields: [goalId], references: [id])
+  goalVersion          GoalVersion          @relation(fields: [goalVersionId], references: [id])
+  challengeParticipant ChallengeParticipant @relation(fields: [challengeParticipantId], references: [id], onDelete: Cascade)
+
+  @@unique([goalId, recordDate])
+  @@map("daily_records")
 }
