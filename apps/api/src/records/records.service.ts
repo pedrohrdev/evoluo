@@ -76,6 +76,62 @@ export class RecordsService {
     });
   }
 
+  // Histórico dia a dia (CLAUDE.md seção "Histórico" / IMPLEMENTATION_PLAN
+  // etapa 11): só dias já FECHADOS por close_daily_period (day_results com
+  // closed = true) — nunca "hoje", cujo estado tentativo já é exposto por
+  // GET .../streak. Um dia fechado sem nenhum registro aparece com
+  // completedGoalsCount 0 e records vazio (0/3 automático, CLAUDE.md seção
+  // 2 "Cumprimento de metas"). Cada registro devolvido é o snapshot exato
+  // gravado no momento (kind/importance/targetValueSnapshot), nunca a
+  // configuração atual da meta — a mesma garantia de imutabilidade da
+  // etapa 5, aqui só para leitura.
+  async getHistory(participantId: string) {
+    const participant = await this.prisma.challengeParticipant.findUnique({
+      where: { id: participantId },
+      select: { id: true },
+    });
+
+    if (!participant) {
+      throw new NotFoundException('Participante não encontrado.');
+    }
+
+    const dayResults = await this.prisma.dayResult.findMany({
+      where: { challengeParticipantId: participantId, closed: true },
+      orderBy: { resultDate: 'desc' },
+    });
+
+    if (dayResults.length === 0) {
+      return [];
+    }
+
+    const records = await this.prisma.dailyRecord.findMany({
+      where: {
+        challengeParticipantId: participantId,
+        recordDate: { in: dayResults.map((dayResult) => dayResult.resultDate) },
+      },
+      orderBy: { recordDate: 'desc' },
+    });
+
+    const recordsByDate = new Map<number, typeof records>();
+    for (const record of records) {
+      const key = record.recordDate.getTime();
+      const bucket = recordsByDate.get(key);
+      if (bucket) {
+        bucket.push(record);
+      } else {
+        recordsByDate.set(key, [record]);
+      }
+    }
+
+    return dayResults.map((dayResult) => ({
+      date: dayResult.resultDate,
+      completedGoalsCount: dayResult.completedGoalsCount,
+      dayCompleted: dayResult.dayCompleted,
+      streakAfter: dayResult.streakAfter,
+      records: recordsByDate.get(dayResult.resultDate.getTime()) ?? [],
+    }));
+  }
+
   private assertActualMatchesKind(kind: GoalKind, dto: RecordDailyGoalDto): void {
     if (kind === GoalKind.boolean) {
       if (dto.actualBoolean === undefined) {

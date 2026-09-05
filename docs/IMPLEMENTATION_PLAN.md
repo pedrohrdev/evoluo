@@ -34,7 +34,7 @@ Uma etapa só é marcada como `[x]` depois de implementada, testada, integrada a
 - [x] **10. Perfis públicos**
   Endpoint(s) de perfil público de um participante, visível a qualquer usuário autenticado: metas, histórico, streak, pontos e estatísticas básicas.
 
-- [ ] **11. Histórico diário**
+- [x] **11. Histórico diário**
   Consulta do histórico dia a dia de um participante (registros diários passados), respeitando a imutabilidade já garantida no banco.
 
 - [ ] **12. Metas semanais/mensais**

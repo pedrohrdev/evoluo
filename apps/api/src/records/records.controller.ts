@@ -1,4 +1,4 @@
-import { Body, Controller, Param, ParseUUIDPipe, Put, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Put, UseGuards } from '@nestjs/common';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { SupabaseAuthGuard } from '../auth/guards/supabase-auth.guard';
 import { AuthenticatedUser } from '../auth/interfaces/authenticated-user.interface';
@@ -20,5 +20,12 @@ export class RecordsController {
     @Body() dto: RecordDailyGoalDto,
   ) {
     return this.recordsService.recordToday(goalId, user.id, dto);
+  }
+
+  // Histórico é público para leitura, como perfis/metas/pontos/streak
+  // (CLAUDE.md seção 2 "Perfis").
+  @Get('challenge-participants/:participantId/daily-history')
+  getHistory(@Param('participantId', ParseUUIDPipe) participantId: string) {
+    return this.recordsService.getHistory(participantId);
   }
 }
