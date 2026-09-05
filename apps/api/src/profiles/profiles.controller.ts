@@ -24,6 +24,6 @@ export class ProfilesController {
 
   @Get(':id')
   findOne(@Param('id', ParseUUIDPipe) id: string) {
-    return this.profilesService.findById(id);
+    return this.profilesService.getPublicProfile(id);
   }
 }
