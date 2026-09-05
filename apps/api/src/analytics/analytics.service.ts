@@ -1,0 +1,115 @@
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { GoalKind, GoalPeriod } from '@prisma/client';
+import { GoalsService } from '../goals/goals.service';
+import { PrismaService } from '../prisma/prisma.service';
+
+interface RawRecord {
+  actualValue: unknown;
+  actualBoolean: boolean | null;
+  kind: GoalKind;
+}
+
+export interface KindAggregate {
+  kind: GoalKind;
+  recordsCount: number;
+  // Presentes só para horas/quantidade (o valor real é numérico).
+  sum?: number;
+  average?: number;
+  min?: number;
+  max?: number;
+  // Presente só para sim/não (não há valor numérico a somar).
+  completedCount?: number;
+}
+
+// Analytics usa sempre os valores REAIS registrados (actual_value/
+// actual_boolean), nunca só o campo `completed` (CLAUDE.md seção
+// "Analytics" / IMPLEMENTATION_PLAN etapa 14) — por isso agrupa e soma os
+// registros brutos aqui, em vez de reaproveitar PointsService/StreakService
+// (que só enxergam cumpriu/não cumpriu). Deliberadamente independente de
+// Scoring e Streak (docs/arquitetura-tecnica.md seção 3), lendo direto de
+// Daily/Weekly/Monthly/ChallengeRecord.
+@Injectable()
+export class AnalyticsService {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly goalsService: GoalsService,
+  ) {}
+
+  async getParticipantAnalytics(participantId: string) {
+    const participant = await this.prisma.challengeParticipant.findUnique({
+      where: { id: participantId },
+      select: { id: true },
+    });
+
+    if (!participant) {
+      throw new NotFoundException('Participante não encontrado.');
+    }
+
+    const goals = await this.goalsService.findAllForParticipant(participantId);
+
+    return Promise.all(
+      goals.map(async (goal) => {
+        const records = await this.fetchRecords(goal.id, goal.periodType);
+        return {
+          ...goal,
+          recordsCount: records.length,
+          byKind: this.aggregateByKind(records),
+        };
+      }),
+    );
+  }
+
+  private fetchRecords(goalId: string, periodType: GoalPeriod): Promise<RawRecord[]> {
+    const select = { actualValue: true, actualBoolean: true, kind: true } as const;
+
+    switch (periodType) {
+      case GoalPeriod.daily:
+        return this.prisma.dailyRecord.findMany({ where: { goalId }, select });
+      case GoalPeriod.weekly:
+        return this.prisma.weeklyRecord.findMany({ where: { goalId }, select });
+      case GoalPeriod.monthly:
+        return this.prisma.monthlyRecord.findMany({ where: { goalId }, select });
+      case GoalPeriod.challenge:
+        return this.prisma.challengeRecord.findMany({ where: { goalId }, select });
+    }
+  }
+
+  // Agrupado pelo `kind` gravado em cada registro (o snapshot da versão
+  // vigente no momento, não a configuração atual da meta) — assim uma
+  // eventual troca de tipo no meio da vida da meta nunca reinterpreta
+  // registros antigos com a unidade errada.
+  private aggregateByKind(records: RawRecord[]): KindAggregate[] {
+    const groups = new Map<GoalKind, RawRecord[]>();
+    for (const record of records) {
+      const bucket = groups.get(record.kind);
+      if (bucket) {
+        bucket.push(record);
+      } else {
+        groups.set(record.kind, [record]);
+      }
+    }
+
+    return Array.from(groups.entries()).map(([kind, groupRecords]) => {
+      if (kind === GoalKind.boolean) {
+        return {
+          kind,
+          recordsCount: groupRecords.length,
+          completedCount: groupRecords.filter((record) => record.actualBoolean === true).length,
+        };
+      }
+
+      const values = groupRecords
+        .map((record) => (record.actualValue === null ? null : Number(record.actualValue)))
+        .filter((value): value is number => value !== null);
+
+      return {
+        kind,
+        recordsCount: groupRecords.length,
+        sum: values.reduce((total, value) => total + value, 0),
+        average: values.length > 0 ? values.reduce((total, value) => total + value, 0) / values.length : 0,
+        min: values.length > 0 ? Math.min(...values) : 0,
+        max: values.length > 0 ? Math.max(...values) : 0,
+      };
+    });
+  }
+}

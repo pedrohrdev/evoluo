@@ -43,7 +43,7 @@ Uma etapa só é marcada como `[x]` depois de implementada, testada, integrada a
 - [x] **13. Metas de 30/50/100/365 dias**
   Registro e fechamento da meta de duração do desafio, incluindo o cálculo do valor-alvo ajustado para quem entra com o desafio já iniciado (dias restantes a partir da data de entrada).
 
-- [ ] **14. Sistema de análises**
+- [x] **14. Sistema de análises**
   Endpoints de analytics que agregam os valores reais registrados (não apenas cumprido/não cumprido) por período, conforme `docs/arquitetura-tecnica.md` seção 3 (módulo Analytics).
 
 - [ ] **15. Dashboard**
