@@ -2,6 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { Check, History as HistoryIcon, X } from "lucide-react";
+import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/feedback";
 import { Surface } from "@/components/ui/surface";
@@ -35,13 +36,11 @@ export default function HistoryPage() {
 
   return (
     <div className="mx-auto max-w-2xl">
-      <div className="mb-6 flex items-center gap-2">
-        <HistoryIcon className="size-5 text-accent" aria-hidden />
-        <div>
-          <h1 className="font-display text-2xl font-semibold text-ink">Histórico diário</h1>
-          <p className="text-sm text-ink-muted">Dias já fechados — imutáveis, exatamente como registrados.</p>
-        </div>
-      </div>
+      <PageHeader
+        icon={HistoryIcon}
+        title="Histórico diário"
+        description="Dias já fechados — imutáveis, exatamente como registrados."
+      />
 
       {days.length === 0 ? (
         <EmptyState icon={HistoryIcon} title="Ainda sem dias fechados" description="O primeiro dia aparece aqui assim que o fechamento diário rodar." />

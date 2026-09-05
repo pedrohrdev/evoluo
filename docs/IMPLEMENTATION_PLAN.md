@@ -49,8 +49,8 @@ Uma etapa só é marcada como `[x]` depois de implementada, testada, integrada a
 - [x] **15. Dashboard + UX/UI e identidade visual**
   Como não havia nenhum frontend ainda, esta etapa passou a cobrir de uma vez o que as etapas 15 ("Dashboard") e 16 ("UX/UI e simplificação") do plano original descreviam separadamente: fundação do frontend (`apps/web`, Next.js App Router), design system próprio (cores, tipografia, componentes, sons), e o fluxo navegável completo — login/cadastro, criar/entrar em desafio, configurar as 3 metas diárias obrigatórias, dashboard, registro de metas, streak, ranking, histórico, análises e perfil público. Decisão registrada e confirmada com o usuário antes de codificar.
 
-- [ ] **16. UX/UI e simplificação (refinamento adicional)**
-  Passada extra de consistência/polimento sobre as telas das etapas 15 e 17 — a identidade visual e os fluxos principais já foram estabelecidos na etapa 15, e a responsividade na etapa 17.
+- [x] **16. UX/UI e simplificação (refinamento adicional)**
+  Passada de consistência sobre as telas das etapas 15 e 17: rótulos de tipo/importância/periodicidade de meta centralizados em `lib/domain/labels.ts` (antes duplicados em 4 componentes), cabeçalho padrão (`PageHeader`) extraído para ranking/histórico/análises, e o estado "registrado abaixo do alvo hoje" deixou de usar vermelho (não é uma falha definitiva — o registro do dia ainda pode ser editado) e passou a usar o acento, reservando vermelho só para erro de verdade e para o "não concluído" definitivo do histórico.
 
 - [x] **17. Responsividade/mobile**
   Ajustes de layout para uso confortável em telas pequenas/mobile: barra de navegação inferior fixa no lugar do menu de topo, cards de meta/ranking/histórico com empilhamento e truncamento seguros, modais com altura máxima e rolagem interna, filtros de análises roláveis horizontalmente em vez de quebrar o layout.

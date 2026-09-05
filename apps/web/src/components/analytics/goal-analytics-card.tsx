@@ -2,16 +2,8 @@ import { Badge } from "@/components/ui/badge";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import { Surface } from "@/components/ui/surface";
 import type { GoalAnalytics } from "@/lib/api/types";
+import { GOAL_KIND_LABEL, GOAL_PERIOD_LABEL } from "@/lib/domain/labels";
 import { formatNumber, formatValueForKind } from "@/lib/format/format";
-
-const PERIOD_LABEL: Record<string, string> = {
-  daily: "Diária",
-  weekly: "Semanal",
-  monthly: "Mensal",
-  challenge: "Duração",
-};
-
-const KIND_LABEL: Record<string, string> = { hours: "Horas", quantity: "Quantidade", boolean: "Sim/não" };
 
 export function GoalAnalyticsCard({ analytics }: { analytics: GoalAnalytics }) {
   const title = analytics.currentVersion?.title ?? "Meta";
@@ -21,7 +13,7 @@ export function GoalAnalyticsCard({ analytics }: { analytics: GoalAnalytics }) {
     <Surface className="p-5">
       <div className="flex items-center justify-between gap-2">
         <p className="truncate font-medium text-ink">{title}</p>
-        <Badge tone="neutral">{PERIOD_LABEL[analytics.periodType]}</Badge>
+        <Badge tone="neutral">{GOAL_PERIOD_LABEL[analytics.periodType]}</Badge>
       </div>
 
       {analytics.recordsCount === 0 ? (
@@ -31,7 +23,7 @@ export function GoalAnalyticsCard({ analytics }: { analytics: GoalAnalytics }) {
           {analytics.byKind.map((agg) => (
             <div key={agg.kind}>
               <div className="mb-1.5 flex items-center justify-between text-xs text-ink-muted">
-                <span>{KIND_LABEL[agg.kind]}</span>
+                <span>{GOAL_KIND_LABEL[agg.kind]}</span>
                 <span>{agg.recordsCount} registro(s)</span>
               </div>
 

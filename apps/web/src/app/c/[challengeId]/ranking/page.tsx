@@ -3,6 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Trophy } from "lucide-react";
 import { RankingList } from "@/components/ranking/ranking-list";
+import { PageHeader } from "@/components/layout/page-header";
 import { ErrorState, LoadingState } from "@/components/ui/feedback";
 import { Surface } from "@/components/ui/surface";
 import { getRanking } from "@/lib/api/ranking";
@@ -18,13 +19,7 @@ export default function RankingPage() {
 
   return (
     <div className="mx-auto max-w-2xl">
-      <div className="mb-6 flex items-center gap-2">
-        <Trophy className="size-5 text-accent" aria-hidden />
-        <div>
-          <h1 className="font-display text-2xl font-semibold text-ink">Ranking</h1>
-          <p className="text-sm text-ink-muted">Streak atual → pontos → dias concluídos.</p>
-        </div>
-      </div>
+      <PageHeader icon={Trophy} title="Ranking" description="Streak atual → pontos → dias concluídos." />
 
       {isLoading ? <LoadingState label="Carregando ranking…" /> : null}
       {isError ? <ErrorState message="Não foi possível carregar o ranking." onRetry={() => void refetch()} /> : null}
