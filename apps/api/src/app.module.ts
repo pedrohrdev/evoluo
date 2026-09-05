@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { AnalyticsModule } from './analytics/analytics.module';
 import { AuthModule } from './auth/auth.module';
 import { ChallengesModule } from './challenges/challenges.module';
 import { validateEnv } from './config/env.validation';
@@ -28,6 +29,7 @@ import { SupabaseModule } from './supabase/supabase.module';
     PointsModule,
     StreakModule,
     RankingModule,
+    AnalyticsModule,
   ],
 })
 export class AppModule {}
