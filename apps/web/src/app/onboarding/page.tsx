@@ -11,7 +11,7 @@ import { Surface } from "@/components/ui/surface";
 import { CreateChallengeModal } from "@/components/challenge/create-challenge-modal";
 import { JoinChallengeModal } from "@/components/challenge/join-challenge-modal";
 import { StreakFlame } from "@/components/streak/streak-flame";
-import { getProfile } from "@/lib/api/profiles";
+import { getProfile, profileQueryKey } from "@/lib/api/profiles";
 import { useAuth } from "@/lib/auth/auth-context";
 import { useRequireAuth } from "@/lib/auth/use-require-auth";
 import { daysBetween } from "@/lib/format/format";
@@ -27,14 +27,14 @@ export default function OnboardingPage() {
   const [joinOpen, setJoinOpen] = useState(false);
 
   const { data: profile, isLoading, isError, refetch } = useQuery({
-    queryKey: ["my-profile", session?.userId],
+    queryKey: profileQueryKey(session?.userId ?? ""),
     queryFn: () => getProfile(session!.userId),
     enabled: isReady && !!session,
   });
 
   function handleEnteredChallenge(challengeId: string) {
     play("joined");
-    void queryClient.invalidateQueries({ queryKey: ["my-profile", session?.userId] });
+    void queryClient.invalidateQueries({ queryKey: profileQueryKey(session?.userId ?? "") });
     router.push(`/c/${challengeId}`);
   }
 

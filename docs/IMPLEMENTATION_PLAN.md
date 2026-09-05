@@ -55,8 +55,8 @@ Uma etapa só é marcada como `[x]` depois de implementada, testada, integrada a
 - [x] **17. Responsividade/mobile**
   Ajustes de layout para uso confortável em telas pequenas/mobile: barra de navegação inferior fixa no lugar do menu de topo, cards de meta/ranking/histórico com empilhamento e truncamento seguros, modais com altura máxima e rolagem interna, filtros de análises roláveis horizontalmente em vez de quebrar o layout.
 
-- [ ] **18. Performance**
-  Otimizações de consulta, cache (quando justificado por volume real) e revisão de índices, conforme apontado em `docs/arquitetura-tecnica.md` seção 7.
+- [x] **18. Performance**
+  Revisão de índices: todos os padrões de consulta usados pelas etapas 4-17 já estão cobertos pelos índices criados na etapa 2 (nenhum índice novo foi necessário). Otimizações de consulta aplicadas: `AnalyticsService` e `ProfilesService.getPublicProfile` faziam uma query por meta/participação (N+1); passaram a fazer no máximo uma query por tabela/lote. Frontend: chave de cache do React Query para `GET /profiles/:id` unificada (`profileQueryKey`), antes duplicada sob 3 nomes diferentes, o que fazia o mesmo perfil ser buscado mais de uma vez. Cache (Redis/view materializada) e pré-agregação de analytics permanecem deliberadamente fora de escopo — `docs/arquitetura-tecnica.md` seção 7 só recomenda isso quando o volume real justificar, o que ainda não é o caso.
 
 - [ ] **19. Segurança e regras anti-exploit**
   Revisão de autorização, rate limiting (especialmente no endpoint de entrada por código de desafio), validação de entrada, e confirmação de que a defesa em profundidade do banco (RLS + grants por coluna) continua íntegra.

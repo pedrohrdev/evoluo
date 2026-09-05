@@ -4,17 +4,20 @@ import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { Skeleton } from "@/components/ui/feedback";
 import { StreakFlame } from "@/components/streak/streak-flame";
-import { getProfile } from "@/lib/api/profiles";
+import { getProfile, profileQueryKey } from "@/lib/api/profiles";
 import type { RankingEntry } from "@/lib/api/types";
 import { cn } from "@/lib/cn";
 
 // Resolve nome/avatar por linha (a API de ranking não devolve displayName —
 // é leitura pública de qualquer perfil, GET /profiles/:userId). Aceitável
 // no volume esperado de um desafio entre amigos (ver
-// docs/arquitetura-tecnica.md seção 7).
+// docs/arquitetura-tecnica.md seção 7). Usa a mesma chave de cache da tela
+// de perfil e do bootstrap do desafio ativo (profileQueryKey) — se algum
+// desses já buscou este userId, o React Query reaproveita em vez de
+// refazer a chamada (etapa 18 "Performance").
 export function RankingRow({ entry, highlight }: { entry: RankingEntry; highlight?: boolean }) {
   const { data: profile } = useQuery({
-    queryKey: ["profile-name", entry.userId],
+    queryKey: profileQueryKey(entry.userId),
     queryFn: () => getProfile(entry.userId),
     staleTime: 5 * 60_000,
   });

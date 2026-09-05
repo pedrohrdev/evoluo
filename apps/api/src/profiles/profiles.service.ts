@@ -40,24 +40,29 @@ export class ProfilesService {
       orderBy: { joinedAt: 'desc' },
     });
 
-    const challenges = await Promise.all(
-      participations.map(async (participant) => ({
-        challengeId: participant.challenge.id,
-        challengeName: participant.challenge.name,
-        durationDays: participant.challenge.durationDays,
-        startDate: participant.challenge.startDate,
-        endDate: participant.challenge.endDate,
-        participantId: participant.id,
-        status: participant.status,
-        joinedAt: participant.joinedAt,
-        leftAt: participant.leftAt,
-        currentStreak: participant.currentStreak,
-        longestStreak: participant.longestStreak,
-        totalPoints: participant.totalPoints,
-        totalDaysCompleted: participant.totalDaysCompleted,
-        goals: await this.goalsService.findAllForParticipant(participant.id),
-      })),
+    // Uma única query para as metas de todas as participações (nunca uma
+    // por desafio) — evita um N+1 quando o usuário está em vários desafios
+    // (etapa 18 "Performance").
+    const goalsByParticipant = await this.goalsService.findAllForParticipants(
+      participations.map((participant) => participant.id),
     );
+
+    const challenges = participations.map((participant) => ({
+      challengeId: participant.challenge.id,
+      challengeName: participant.challenge.name,
+      durationDays: participant.challenge.durationDays,
+      startDate: participant.challenge.startDate,
+      endDate: participant.challenge.endDate,
+      participantId: participant.id,
+      status: participant.status,
+      joinedAt: participant.joinedAt,
+      leftAt: participant.leftAt,
+      currentStreak: participant.currentStreak,
+      longestStreak: participant.longestStreak,
+      totalPoints: participant.totalPoints,
+      totalDaysCompleted: participant.totalDaysCompleted,
+      goals: goalsByParticipant.get(participant.id) ?? [],
+    }));
 
     return { ...profile, challenges };
   }

@@ -15,12 +15,14 @@ describe('AnalyticsService', () => {
   let goalsService: GoalsService;
   let service: AnalyticsService;
 
+  const SELECT = { goalId: true, actualValue: true, actualBoolean: true, kind: true };
+
   beforeEach(() => {
     participantFindUnique = jest.fn();
-    dailyRecordFindMany = jest.fn();
-    weeklyRecordFindMany = jest.fn();
-    monthlyRecordFindMany = jest.fn();
-    challengeRecordFindMany = jest.fn();
+    dailyRecordFindMany = jest.fn().mockResolvedValue([]);
+    weeklyRecordFindMany = jest.fn().mockResolvedValue([]);
+    monthlyRecordFindMany = jest.fn().mockResolvedValue([]);
+    challengeRecordFindMany = jest.fn().mockResolvedValue([]);
     findAllForParticipant = jest.fn();
 
     prisma = {
@@ -50,16 +52,16 @@ describe('AnalyticsService', () => {
       { id: 'g1', periodType: GoalPeriod.daily, currentVersion: { kind: GoalKind.hours, targetValue: 5 } },
     ]);
     dailyRecordFindMany.mockResolvedValue([
-      { actualValue: 5, actualBoolean: null, kind: GoalKind.hours },
-      { actualValue: 3, actualBoolean: null, kind: GoalKind.hours },
-      { actualValue: 7, actualBoolean: null, kind: GoalKind.hours },
+      { goalId: 'g1', actualValue: 5, actualBoolean: null, kind: GoalKind.hours },
+      { goalId: 'g1', actualValue: 3, actualBoolean: null, kind: GoalKind.hours },
+      { goalId: 'g1', actualValue: 7, actualBoolean: null, kind: GoalKind.hours },
     ]);
 
     const result = await service.getParticipantAnalytics('p1');
 
     expect(dailyRecordFindMany).toHaveBeenCalledWith({
-      where: { goalId: 'g1' },
-      select: { actualValue: true, actualBoolean: true, kind: true },
+      where: { goalId: { in: ['g1'] } },
+      select: SELECT,
     });
     expect(result).toEqual([
       {
@@ -76,16 +78,16 @@ describe('AnalyticsService', () => {
     participantFindUnique.mockResolvedValue({ id: 'p1' });
     findAllForParticipant.mockResolvedValue([{ id: 'g2', periodType: GoalPeriod.weekly, currentVersion: null }]);
     weeklyRecordFindMany.mockResolvedValue([
-      { actualValue: null, actualBoolean: true, kind: GoalKind.boolean },
-      { actualValue: null, actualBoolean: false, kind: GoalKind.boolean },
-      { actualValue: null, actualBoolean: true, kind: GoalKind.boolean },
+      { goalId: 'g2', actualValue: null, actualBoolean: true, kind: GoalKind.boolean },
+      { goalId: 'g2', actualValue: null, actualBoolean: false, kind: GoalKind.boolean },
+      { goalId: 'g2', actualValue: null, actualBoolean: true, kind: GoalKind.boolean },
     ]);
 
     const result = await service.getParticipantAnalytics('p1');
 
     expect(weeklyRecordFindMany).toHaveBeenCalledWith({
-      where: { goalId: 'g2' },
-      select: { actualValue: true, actualBoolean: true, kind: true },
+      where: { goalId: { in: ['g2'] } },
+      select: SELECT,
     });
     expect(result[0].byKind).toEqual([{ kind: GoalKind.boolean, recordsCount: 3, completedCount: 2 }]);
   });
@@ -96,8 +98,8 @@ describe('AnalyticsService', () => {
     // Meta mudou de quantidade para horas no meio da vida; registros antigos
     // continuam com o kind gravado no momento (imutabilidade histórica).
     monthlyRecordFindMany.mockResolvedValue([
-      { actualValue: 10, actualBoolean: null, kind: GoalKind.quantity },
-      { actualValue: 2, actualBoolean: null, kind: GoalKind.hours },
+      { goalId: 'g3', actualValue: 10, actualBoolean: null, kind: GoalKind.quantity },
+      { goalId: 'g3', actualValue: 2, actualBoolean: null, kind: GoalKind.hours },
     ]);
 
     const result = await service.getParticipantAnalytics('p1');
@@ -116,29 +118,52 @@ describe('AnalyticsService', () => {
       { id: 'gm', periodType: GoalPeriod.monthly, currentVersion: null },
       { id: 'gc', periodType: GoalPeriod.challenge, currentVersion: null },
     ]);
-    monthlyRecordFindMany.mockResolvedValue([]);
-    challengeRecordFindMany.mockResolvedValue([]);
 
     await service.getParticipantAnalytics('p1');
 
     expect(monthlyRecordFindMany).toHaveBeenCalledWith({
-      where: { goalId: 'gm' },
-      select: { actualValue: true, actualBoolean: true, kind: true },
+      where: { goalId: { in: ['gm'] } },
+      select: SELECT,
     });
     expect(challengeRecordFindMany).toHaveBeenCalledWith({
-      where: { goalId: 'gc' },
-      select: { actualValue: true, actualBoolean: true, kind: true },
+      where: { goalId: { in: ['gc'] } },
+      select: SELECT,
     });
+    expect(dailyRecordFindMany).not.toHaveBeenCalled();
+    expect(weeklyRecordFindMany).not.toHaveBeenCalled();
   });
 
   it('returns an empty byKind list and zero recordsCount for a goal with no records yet', async () => {
     participantFindUnique.mockResolvedValue({ id: 'p1' });
     findAllForParticipant.mockResolvedValue([{ id: 'g1', periodType: GoalPeriod.daily, currentVersion: null }]);
-    dailyRecordFindMany.mockResolvedValue([]);
 
     const result = await service.getParticipantAnalytics('p1');
 
     expect(result[0].recordsCount).toBe(0);
     expect(result[0].byKind).toEqual([]);
+  });
+
+  it('fetches records for multiple daily goals with a single query (no N+1 per goal)', async () => {
+    participantFindUnique.mockResolvedValue({ id: 'p1' });
+    findAllForParticipant.mockResolvedValue([
+      { id: 'g1', periodType: GoalPeriod.daily, currentVersion: null },
+      { id: 'g2', periodType: GoalPeriod.daily, currentVersion: null },
+      { id: 'g3', periodType: GoalPeriod.daily, currentVersion: null },
+    ]);
+    dailyRecordFindMany.mockResolvedValue([
+      { goalId: 'g1', actualValue: 1, actualBoolean: null, kind: GoalKind.quantity },
+      { goalId: 'g2', actualValue: 2, actualBoolean: null, kind: GoalKind.quantity },
+    ]);
+
+    const result = await service.getParticipantAnalytics('p1');
+
+    expect(dailyRecordFindMany).toHaveBeenCalledTimes(1);
+    expect(dailyRecordFindMany).toHaveBeenCalledWith({
+      where: { goalId: { in: ['g1', 'g2', 'g3'] } },
+      select: SELECT,
+    });
+    expect(result.find((g) => g.id === 'g1')?.recordsCount).toBe(1);
+    expect(result.find((g) => g.id === 'g2')?.recordsCount).toBe(1);
+    expect(result.find((g) => g.id === 'g3')?.recordsCount).toBe(0);
   });
 });

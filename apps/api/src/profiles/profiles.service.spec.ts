@@ -7,7 +7,7 @@ describe('ProfilesService', () => {
   let findUnique: jest.Mock;
   let update: jest.Mock;
   let participantFindMany: jest.Mock;
-  let findAllForParticipant: jest.Mock;
+  let findAllForParticipants: jest.Mock;
   let prisma: PrismaService;
   let goalsService: GoalsService;
   let service: ProfilesService;
@@ -16,12 +16,12 @@ describe('ProfilesService', () => {
     findUnique = jest.fn();
     update = jest.fn();
     participantFindMany = jest.fn();
-    findAllForParticipant = jest.fn();
+    findAllForParticipants = jest.fn().mockResolvedValue(new Map());
     prisma = {
       profile: { findUnique, update },
       challengeParticipant: { findMany: participantFindMany },
     } as unknown as PrismaService;
-    goalsService = { findAllForParticipant } as unknown as GoalsService;
+    goalsService = { findAllForParticipants } as unknown as GoalsService;
     service = new ProfilesService(prisma, goalsService);
   });
 
@@ -66,7 +66,7 @@ describe('ProfilesService', () => {
       ];
       participantFindMany.mockResolvedValue(participants);
       const goals = [{ id: 'g1', periodType: 'daily' }];
-      findAllForParticipant.mockResolvedValue(goals);
+      findAllForParticipants.mockResolvedValue(new Map([['p1', goals]]));
 
       const result = await service.getPublicProfile('u1');
 
@@ -80,7 +80,10 @@ describe('ProfilesService', () => {
         },
         orderBy: { joinedAt: 'desc' },
       });
-      expect(findAllForParticipant).toHaveBeenCalledWith('p1');
+      // Uma única chamada com todos os participantIds, nunca uma por
+      // participação (etapa 18 "Performance").
+      expect(findAllForParticipants).toHaveBeenCalledTimes(1);
+      expect(findAllForParticipants).toHaveBeenCalledWith(['p1']);
       expect(result).toEqual({
         ...profile,
         challenges: [
@@ -119,7 +122,6 @@ describe('ProfilesService', () => {
           challenge: { id: 'c1', name: 'Desafio', durationDays: 30, startDate: new Date(), endDate: new Date() },
         },
       ]);
-      findAllForParticipant.mockResolvedValue([]);
 
       const result = await service.getPublicProfile('u1');
 

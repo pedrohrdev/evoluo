@@ -54,6 +54,32 @@ export class GoalsService {
     }));
   }
 
+  // Mesmo formato de findAllForParticipant, mas para vários participantes
+  // de uma vez (uma única query com IN, não uma por participante) — usado
+  // por ProfilesService.getPublicProfile para listar as metas de cada
+  // desafio do usuário sem um N+1 (etapa 18 "Performance").
+  async findAllForParticipants(participantIds: string[]) {
+    type GoalDto = Awaited<ReturnType<GoalsService['findAllForParticipant']>>[number];
+    const byParticipant = new Map<string, GoalDto[]>();
+    if (participantIds.length === 0) {
+      return byParticipant;
+    }
+
+    const goals = await this.prisma.goal.findMany({
+      where: { challengeParticipantId: { in: participantIds } },
+      include: { versions: { where: { validUntil: null } } },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    for (const { versions, ...goal } of goals) {
+      const dto = { ...goal, currentVersion: versions[0] ?? null };
+      const bucket = byParticipant.get(goal.challengeParticipantId);
+      if (bucket) bucket.push(dto);
+      else byParticipant.set(goal.challengeParticipantId, [dto]);
+    }
+    return byParticipant;
+  }
+
   // Fecha a versão vigente e abre uma nova — nunca UPDATE no conteúdo de
   // uma versão existente (histórico permanece intacto, CLAUDE.md seção 2
   // "Histórico" / docs/database-schema.md, função set_goal_version).

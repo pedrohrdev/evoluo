@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { ErrorState, LoadingState } from "@/components/ui/feedback";
 import { Surface } from "@/components/ui/surface";
 import { StreakFlame } from "@/components/streak/streak-flame";
-import { getProfile } from "@/lib/api/profiles";
+import { getProfile, profileQueryKey } from "@/lib/api/profiles";
 import { useAuth } from "@/lib/auth/auth-context";
 import { useRequireAuth } from "@/lib/auth/use-require-auth";
 import { formatDateLong } from "@/lib/format/format";
@@ -26,7 +26,7 @@ export default function ProfilePage() {
   const [editing, setEditing] = useState(false);
 
   const { data: profile, isLoading, isError, refetch } = useQuery({
-    queryKey: ["profile", id],
+    queryKey: profileQueryKey(id),
     queryFn: () => getProfile(id),
     enabled: isReady,
   });
@@ -104,7 +104,7 @@ export default function ProfilePage() {
           open={editing}
           onOpenChange={setEditing}
           profile={profile}
-          onSaved={() => void queryClient.invalidateQueries({ queryKey: ["profile", id] })}
+          onSaved={() => void queryClient.invalidateQueries({ queryKey: profileQueryKey(id) })}
         />
       ) : null}
     </div>
