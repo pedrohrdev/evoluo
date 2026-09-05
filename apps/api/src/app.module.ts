@@ -7,6 +7,7 @@ import { GoalsModule } from './goals/goals.module';
 import { PointsModule } from './points/points.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ProfilesModule } from './profiles/profiles.module';
+import { RankingModule } from './ranking/ranking.module';
 import { RecordsModule } from './records/records.module';
 import { StreakModule } from './streak/streak.module';
 import { SupabaseModule } from './supabase/supabase.module';
@@ -26,6 +27,7 @@ import { SupabaseModule } from './supabase/supabase.module';
     RecordsModule,
     PointsModule,
     StreakModule,
+    RankingModule,
   ],
 })
 export class AppModule {}

@@ -28,7 +28,7 @@ Uma etapa só é marcada como `[x]` depois de implementada, testada, integrada a
 - [x] **8. Streak**
   Exposição do streak atual e maior streak do participante (já calculados e mantidos por `close_daily_period` no banco). Garantir que a UI/API reflitam corretamente o estado "tentativo" do dia em andamento (`day_results`) versus o streak definitivo já fechado.
 
-- [ ] **9. Ranking**
+- [x] **9. Ranking**
   Endpoint de ranking por desafio, ordenado por streak atual → pontos → total de dias concluídos → `participant_id`, usando os campos agregados já mantidos em `challenge_participants`.
 
 - [ ] **10. Perfis públicos**
