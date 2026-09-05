@@ -25,7 +25,7 @@ Uma etapa só é marcada como `[x]` depois de implementada, testada, integrada a
 - [x] **7. Sistema de pontos**
   Exposição/consumo do cálculo de pontos já feito pelo banco (`points_config`, `points_awarded`, `points_ledger`): exibição de pontos por registro e pontos totais do participante, sem duplicar a lógica de cálculo no backend.
 
-- [ ] **8. Streak**
+- [x] **8. Streak**
   Exposição do streak atual e maior streak do participante (já calculados e mantidos por `close_daily_period` no banco). Garantir que a UI/API reflitam corretamente o estado "tentativo" do dia em andamento (`day_results`) versus o streak definitivo já fechado.
 
 - [ ] **9. Ranking**
