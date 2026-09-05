@@ -1,9 +1,10 @@
 // Schema Prisma do Evoluo.
 //
-// Etapa 3 (autenticação) só precisa mapear `profiles`. As demais tabelas já
-// existem no banco (ver docs/database-schema.md), mas entram neste arquivo
-// conforme os módulos que as usam forem implementados (etapas 4+), para não
-// antecipar funcionalidade fora do escopo de cada etapa.
+// As tabelas entram neste arquivo conforme os módulos que as usam forem
+// implementados (etapa 3: `profiles`; etapa 4: `challenges` e
+// `challenge_participants`), para não antecipar funcionalidade fora do
+// escopo de cada etapa. As demais tabelas já existem no banco (ver
+// docs/database-schema.md) mas ainda não são usadas por nenhum módulo.
 //
 // `auth.users` é gerenciada pelo Supabase Auth e não é modelada aqui — o
 // NestJS nunca escreve nela diretamente, só via Supabase Auth (SupabaseService).
@@ -25,4 +26,57 @@ model Profile {
   updatedAt   DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
 
   @@map("profiles")
+}
+
+// Status do participante dentro de um desafio específico (ver enum
+// `participant_status` em supabase/migrations/20260905090100_enums.sql).
+enum ParticipantStatus {
+  active
+  inactive
+
+  @@map("participant_status")
+}
+
+model Challenge {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name         String
+  description  String?
+  durationDays Int      @map("duration_days")
+  startDate    DateTime @map("start_date") @db.Date
+  // Coluna gerada pelo banco (`generated always as ... stored`) — nunca
+  // gravada pela aplicação. `dbgenerated()` sem argumento diz ao Prisma para
+  // omitir esta coluna do INSERT/UPDATE e ler o valor calculado de volta via
+  // RETURNING.
+  endDate   DateTime @default(dbgenerated()) @map("end_date") @db.Date
+  createdBy String   @map("created_by") @db.Uuid
+  // Gerado por `generate_join_code()` no banco — a aplicação nunca gera nem
+  // sobrescreve o código, só lê o valor criado pelo default da coluna.
+  joinCode  String   @unique @default(dbgenerated("generate_join_code()")) @map("join_code")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  participants ChallengeParticipant[]
+
+  @@map("challenges")
+}
+
+model ChallengeParticipant {
+  id                 String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  challengeId        String            @map("challenge_id") @db.Uuid
+  userId             String            @map("user_id") @db.Uuid
+  status             ParticipantStatus @default(active)
+  joinedAt           DateTime          @default(now()) @map("joined_at") @db.Timestamptz(6)
+  leftAt             DateTime?         @map("left_at") @db.Timestamptz(6)
+  // Campos agregados mantidos exclusivamente pelas funções de fechamento no
+  // banco (streak/scoring — etapas futuras). A aplicação nunca escreve
+  // nestes campos diretamente; RLS/GRANT por coluna também bloqueiam isso.
+  currentStreak      Int               @default(0) @map("current_streak")
+  longestStreak      Int               @default(0) @map("longest_streak")
+  totalPoints        Int               @default(0) @map("total_points")
+  totalDaysCompleted Int               @default(0) @map("total_days_completed")
+  createdAt          DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  challenge Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+
+  @@unique([challengeId, userId])
+  @@map("challenge_participants")
 }
