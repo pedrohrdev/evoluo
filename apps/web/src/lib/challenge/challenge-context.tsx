@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { createContext, useContext } from "react";
-import { getProfile } from "@/lib/api/profiles";
+import { getProfile, profileQueryKey } from "@/lib/api/profiles";
 import type { ProfileChallengeParticipation } from "@/lib/api/types";
 import { useAuth } from "@/lib/auth/auth-context";
 
@@ -20,7 +20,7 @@ export function ChallengeProvider({ challengeId, children }: { challengeId: stri
   const { session } = useAuth();
 
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ["my-profile", session?.userId],
+    queryKey: profileQueryKey(session?.userId ?? ""),
     queryFn: () => getProfile(session!.userId),
     enabled: !!session,
   });

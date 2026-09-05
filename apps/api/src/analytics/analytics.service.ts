@@ -4,6 +4,7 @@ import { GoalsService } from '../goals/goals.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 interface RawRecord {
+  goalId: string;
   actualValue: unknown;
   actualBoolean: boolean | null;
   kind: GoalKind;
@@ -46,32 +47,55 @@ export class AnalyticsService {
     }
 
     const goals = await this.goalsService.findAllForParticipant(participantId);
+    const recordsByGoal = await this.fetchRecordsByPeriod(goals.map((goal) => ({ id: goal.id, periodType: goal.periodType })));
 
-    return Promise.all(
-      goals.map(async (goal) => {
-        const records = await this.fetchRecords(goal.id, goal.periodType);
-        return {
-          ...goal,
-          recordsCount: records.length,
-          byKind: this.aggregateByKind(records),
-        };
-      }),
-    );
+    return goals.map((goal) => {
+      const records = recordsByGoal.get(goal.id) ?? [];
+      return {
+        ...goal,
+        recordsCount: records.length,
+        byKind: this.aggregateByKind(records),
+      };
+    });
   }
 
-  private fetchRecords(goalId: string, periodType: GoalPeriod): Promise<RawRecord[]> {
-    const select = { actualValue: true, actualBoolean: true, kind: true } as const;
-
-    switch (periodType) {
-      case GoalPeriod.daily:
-        return this.prisma.dailyRecord.findMany({ where: { goalId }, select });
-      case GoalPeriod.weekly:
-        return this.prisma.weeklyRecord.findMany({ where: { goalId }, select });
-      case GoalPeriod.monthly:
-        return this.prisma.monthlyRecord.findMany({ where: { goalId }, select });
-      case GoalPeriod.challenge:
-        return this.prisma.challengeRecord.findMany({ where: { goalId }, select });
+  // Uma consulta por tabela (no máximo 4 — daily/weekly/monthly/challenge),
+  // nunca uma por meta: evita um N+1 quando o participante tem várias metas
+  // do mesmo período (etapa 18 "Performance" / arquitetura seção 7).
+  private async fetchRecordsByPeriod(
+    goals: { id: string; periodType: GoalPeriod }[],
+  ): Promise<Map<string, RawRecord[]>> {
+    const select = { goalId: true, actualValue: true, actualBoolean: true, kind: true } as const;
+    const idsByPeriod = new Map<GoalPeriod, string[]>();
+    for (const goal of goals) {
+      const bucket = idsByPeriod.get(goal.periodType);
+      if (bucket) bucket.push(goal.id);
+      else idsByPeriod.set(goal.periodType, [goal.id]);
     }
+
+    const queries = Array.from(idsByPeriod.entries()).map(([periodType, goalIds]) => {
+      const where = { goalId: { in: goalIds } };
+      switch (periodType) {
+        case GoalPeriod.daily:
+          return this.prisma.dailyRecord.findMany({ where, select });
+        case GoalPeriod.weekly:
+          return this.prisma.weeklyRecord.findMany({ where, select });
+        case GoalPeriod.monthly:
+          return this.prisma.monthlyRecord.findMany({ where, select });
+        case GoalPeriod.challenge:
+          return this.prisma.challengeRecord.findMany({ where, select });
+      }
+    });
+
+    const results = await Promise.all(queries);
+
+    const byGoal = new Map<string, RawRecord[]>();
+    for (const record of results.flat()) {
+      const bucket = byGoal.get(record.goalId);
+      if (bucket) bucket.push(record);
+      else byGoal.set(record.goalId, [record]);
+    }
+    return byGoal;
   }
 
   // Agrupado pelo `kind` gravado em cada registro (o snapshot da versão

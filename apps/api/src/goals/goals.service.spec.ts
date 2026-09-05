@@ -156,6 +156,42 @@ describe('GoalsService', () => {
     });
   });
 
+  describe('findAllForParticipants', () => {
+    it('fetches every participant in a single query and groups goals by participant', async () => {
+      goalFindMany.mockResolvedValue([
+        {
+          id: 'g1',
+          challengeParticipantId: 'p1',
+          periodType: GoalPeriod.daily,
+          versions: [{ id: 'v1', validUntil: null }],
+        },
+        { id: 'g2', challengeParticipantId: 'p2', periodType: GoalPeriod.weekly, versions: [] },
+      ]);
+
+      const result = await service.findAllForParticipants(['p1', 'p2']);
+
+      expect(goalFindMany).toHaveBeenCalledTimes(1);
+      expect(goalFindMany).toHaveBeenCalledWith({
+        where: { challengeParticipantId: { in: ['p1', 'p2'] } },
+        include: { versions: { where: { validUntil: null } } },
+        orderBy: { createdAt: 'asc' },
+      });
+      expect(result.get('p1')).toEqual([
+        { id: 'g1', challengeParticipantId: 'p1', periodType: GoalPeriod.daily, currentVersion: { id: 'v1', validUntil: null } },
+      ]);
+      expect(result.get('p2')).toEqual([
+        { id: 'g2', challengeParticipantId: 'p2', periodType: GoalPeriod.weekly, currentVersion: null },
+      ]);
+    });
+
+    it('returns an empty map without querying when there are no participants', async () => {
+      const result = await service.findAllForParticipants([]);
+
+      expect(result.size).toBe(0);
+      expect(goalFindMany).not.toHaveBeenCalled();
+    });
+  });
+
   describe('setVersion', () => {
     const updateDto = {
       kind: GoalKind.hours,
