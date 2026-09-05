@@ -46,11 +46,11 @@ Uma etapa só é marcada como `[x]` depois de implementada, testada, integrada a
 - [x] **14. Sistema de análises**
   Endpoints de analytics que agregam os valores reais registrados (não apenas cumprido/não cumprido) por período, conforme `docs/arquitetura-tecnica.md` seção 3 (módulo Analytics).
 
-- [ ] **15. Dashboard**
-  Tela(s) de visão geral do participante: progresso do dia, streak, pontos, ranking resumido, atalhos para registro.
+- [x] **15. Dashboard + UX/UI e identidade visual**
+  Como não havia nenhum frontend ainda, esta etapa passou a cobrir de uma vez o que as etapas 15 ("Dashboard") e 16 ("UX/UI e simplificação") do plano original descreviam separadamente: fundação do frontend (`apps/web`, Next.js App Router), design system próprio (cores, tipografia, componentes, sons), e o fluxo navegável completo — login/cadastro, criar/entrar em desafio, configurar as 3 metas diárias obrigatórias, dashboard, registro de metas, streak, ranking, histórico, análises e perfil público. Decisão registrada e confirmada com o usuário antes de codificar.
 
-- [ ] **16. UX/UI e simplificação**
-  Revisão e refinamento da experiência de uso das telas já implementadas, simplificando fluxos e reduzindo fricção.
+- [ ] **16. UX/UI e simplificação (refinamento adicional)**
+  Passada extra de consistência/polimento sobre as telas da etapa 15, depois que a etapa 17 (responsividade) e eventuais novas telas existirem — a identidade visual e os fluxos principais já foram estabelecidos na etapa 15.
 
 - [ ] **17. Responsividade/mobile**
   Ajustes de layout para uso confortável em telas pequenas/mobile.

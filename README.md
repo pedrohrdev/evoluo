@@ -13,3 +13,14 @@ npm run api:build
 npm run api:start:dev
 npm run api:test
 ```
+
+## Web (`apps/web`)
+
+Frontend Next.js (App Router), identidade visual própria (etapa 15). Ver `apps/web/README.md`.
+
+```bash
+npm run web:dev
+npm run web:build
+npm run web:lint
+npm run web:typecheck
+```

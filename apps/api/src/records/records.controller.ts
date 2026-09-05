@@ -61,4 +61,13 @@ export class RecordsController {
   getHistory(@Param('participantId', ParseUUIDPipe) participantId: string) {
     return this.recordsService.getHistory(participantId);
   }
+
+  // Estado do período ainda aberto (hoje/semana/mês/duração) — usado pelo
+  // frontend (etapa 15) para restaurar o que já foi registrado ao
+  // recarregar a página, já que o histórico (acima) só cobre períodos
+  // fechados.
+  @Get('challenge-participants/:participantId/today')
+  getTodayState(@Param('participantId', ParseUUIDPipe) participantId: string) {
+    return this.recordsService.getTodayState(participantId);
+  }
 }
