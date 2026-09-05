@@ -1,4 +1,5 @@
 import { Body, Controller, Get, Param, ParseUUIDPipe, Post, UseGuards } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { SupabaseAuthGuard } from '../auth/guards/supabase-auth.guard';
 import { AuthenticatedUser } from '../auth/interfaces/authenticated-user.interface';
@@ -18,6 +19,12 @@ export class ChallengesController {
     return this.challengesService.create(user.id, dto);
   }
 
+  // Limite mais restrito que o padrão global (etapa 19 "Segurança e regras
+  // anti-exploit"): o código já é não sequencial e de espaço de busca
+  // grande (32^8 combinações — supabase/migrations/20260905090300_challenges.sql),
+  // mas é o único controle de acesso de entrada em desafio, então vale a
+  // camada extra contra tentativa automatizada de adivinhação.
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Post('join')
   join(@CurrentUser() user: AuthenticatedUser, @Body() dto: JoinChallengeDto) {
     return this.challengesService.join(user.id, dto);
