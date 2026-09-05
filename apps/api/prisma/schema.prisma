@@ -1,0 +1,28 @@
+// Schema Prisma do Evoluo.
+//
+// Etapa 3 (autenticação) só precisa mapear `profiles`. As demais tabelas já
+// existem no banco (ver docs/database-schema.md), mas entram neste arquivo
+// conforme os módulos que as usam forem implementados (etapas 4+), para não
+// antecipar funcionalidade fora do escopo de cada etapa.
+//
+// `auth.users` é gerenciada pelo Supabase Auth e não é modelada aqui — o
+// NestJS nunca escreve nela diretamente, só via Supabase Auth (SupabaseService).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Profile {
+  id          String   @id @db.Uuid
+  displayName String   @map("display_name")
+  avatarUrl   String?  @map("avatar_url")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@map("profiles")
+}

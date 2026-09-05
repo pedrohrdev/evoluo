@@ -10,7 +10,7 @@ Uma etapa só é marcada como `[x]` depois de implementada, testada, integrada a
 - [x] **2. Banco de dados + Supabase**
   Implementação do schema completo no Supabase/PostgreSQL: tabelas, enums, constraints, índices, RLS e policies, funções e triggers (incluindo o versionamento imutável de metas e o cálculo de cumprimento/pontos), e os jobs agendados de fechamento de período (streak e pontuação). Testado de ponta a ponta contra um Postgres local simulando o ambiente Supabase. Documentado em `docs/database-schema.md`.
 
-- [ ] **3. Autenticação e usuários**
+- [x] **3. Autenticação e usuários**
   Integração do backend (NestJS) com o Supabase Auth: cadastro, login, sessão/token, proteção de rotas autenticadas. Criação/uso do perfil (`profiles`) já modelado na etapa 2.
 
 - [ ] **4. Criação e entrada em desafios**
