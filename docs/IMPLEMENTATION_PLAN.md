@@ -31,7 +31,7 @@ Uma etapa só é marcada como `[x]` depois de implementada, testada, integrada a
 - [x] **9. Ranking**
   Endpoint de ranking por desafio, ordenado por streak atual → pontos → total de dias concluídos → `participant_id`, usando os campos agregados já mantidos em `challenge_participants`.
 
-- [ ] **10. Perfis públicos**
+- [x] **10. Perfis públicos**
   Endpoint(s) de perfil público de um participante, visível a qualquer usuário autenticado: metas, histórico, streak, pontos e estatísticas básicas.
 
 - [ ] **11. Histórico diário**
