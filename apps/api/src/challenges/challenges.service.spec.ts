@@ -124,5 +124,14 @@ describe('ChallengesService', () => {
 
       await expect(service.join('u2', { joinCode: 'ABCD1234' })).rejects.toThrow(ConflictException);
     });
+
+    it('propagates an unrelated database error instead of misreporting it as a conflict', async () => {
+      challengeFindUnique.mockResolvedValue({ id: 'c1', joinCode: 'ABCD1234' });
+      participantFindUnique.mockResolvedValue(null);
+      const unrelatedError = new Error('connection reset');
+      participantCreate.mockRejectedValue(unrelatedError);
+
+      await expect(service.join('u2', { joinCode: 'ABCD1234' })).rejects.toThrow(unrelatedError);
+    });
   });
 });

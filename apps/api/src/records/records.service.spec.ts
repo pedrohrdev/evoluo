@@ -498,6 +498,24 @@ describe('RecordsService', () => {
       ]);
     });
 
+    it('groups every record of the same day together (a real day has all 3 mandatory daily goals)', async () => {
+      participantFindUnique.mockResolvedValue({ id: 'p1' });
+      const day1 = new Date('2026-01-02');
+      dayResultFindMany.mockResolvedValue([
+        { resultDate: day1, completedGoalsCount: 3, dayCompleted: true, streakAfter: 5 },
+      ]);
+      const recordA = { id: 'r1', recordDate: day1, completed: true, pointsAwarded: 30 };
+      const recordB = { id: 'r2', recordDate: day1, completed: true, pointsAwarded: 20 };
+      const recordC = { id: 'r3', recordDate: day1, completed: true, pointsAwarded: 10 };
+      dailyRecordFindMany.mockResolvedValue([recordA, recordB, recordC]);
+
+      const result = await service.getHistory('p1');
+
+      expect(result).toEqual([
+        { date: day1, completedGoalsCount: 3, dayCompleted: true, streakAfter: 5, records: [recordA, recordB, recordC] },
+      ]);
+    });
+
     it('returns an empty list when there are no closed days yet, without querying daily_records', async () => {
       participantFindUnique.mockResolvedValue({ id: 'p1' });
       dayResultFindMany.mockResolvedValue([]);
