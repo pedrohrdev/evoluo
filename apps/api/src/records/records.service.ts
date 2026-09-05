@@ -1,6 +1,11 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Goal, GoalKind, GoalPeriod, GoalVersion, ParticipantStatus } from '@prisma/client';
-import { currentMonthRangeInSaoPaulo, currentWeekRangeInSaoPaulo, todayInSaoPaulo } from '../common/date/sao-paulo.util';
+import {
+  currentMonthRangeInSaoPaulo,
+  currentWeekRangeInSaoPaulo,
+  toDateString,
+  todayInSaoPaulo,
+} from '../common/date/sao-paulo.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { RecordDailyGoalDto } from './dto/record-daily-goal.dto';
 import { RecordPeriodGoalDto } from './dto/record-period-goal.dto';
@@ -93,6 +98,38 @@ export class RecordsService {
     });
   }
 
+  // Meta de duração: diferente de recordCurrentWeek/Month, o período não é
+  // "o vigente agora" — é fixo por toda a meta: periodStart é a data de
+  // entrada do participante (não o início do desafio) e periodEnd é o fim
+  // do desafio. Isso implementa diretamente a regra de quem entra atrasado
+  // (CLAUDE.md seção 2 "Metas": entrar no dia 10 de um desafio de 30 dias
+  // gera uma meta de duração de 20 dias, não de 30) — inclusive reduzindo
+  // para o caso trivial (0 dias de atraso) de quem entra no dia 1. Só o
+  // período é recalculado; o target_value continua sendo o que o
+  // participante configurou (GoalsService.create), sem nenhuma
+  // proporcionalidade automática.
+  async recordCurrentChallenge(goalId: string, userId: string, dto: RecordPeriodGoalDto) {
+    const { goal, currentVersion } = await this.resolveOpenGoalVersion(goalId, userId, GoalPeriod.challenge);
+
+    this.assertActualMatchesKind(currentVersion.kind, dto);
+
+    const periodStartStr = todayInSaoPaulo(goal.challengeParticipant.joinedAt);
+    // endDate é uma coluna `date` pura — nunca formatá-la com
+    // todayInSaoPaulo, que aplicaria um fuso e deslocaria o dia.
+    const periodEndStr = toDateString(goal.challengeParticipant.challenge.endDate);
+
+    if (todayInSaoPaulo() > periodEndStr) {
+      throw new ForbiddenException('Não é possível registrar a meta de duração depois que o desafio termina.');
+    }
+
+    const start = new Date(periodStartStr);
+
+    return this.prisma.challengeRecord.upsert({
+      where: { goalId },
+      ...this.buildPeriodRecordData(goal, currentVersion, dto, start, new Date(periodEndStr)),
+    });
+  }
+
   private buildPeriodRecordData(
     goal: Goal,
     currentVersion: GoalVersion,
@@ -131,7 +168,10 @@ export class RecordsService {
     const goal = await this.prisma.goal.findUnique({
       where: { id: goalId },
       include: {
-        challengeParticipant: true,
+        // Inclui o desafio para a meta de duração (período fixo = data de
+        // entrada até o fim do desafio); um join a mais e inofensivo para
+        // daily/weekly/monthly, que não usam goal.challengeParticipant.challenge.
+        challengeParticipant: { include: { challenge: true } },
         versions: { where: { validUntil: null } },
       },
     });

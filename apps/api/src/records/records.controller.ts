@@ -44,6 +44,17 @@ export class RecordsController {
     return this.recordsService.recordCurrentMonth(goalId, user.id, dto);
   }
 
+  // Mesmo padrão, para o período de duração do desafio — fixo (data de
+  // entrada do participante até o fim do desafio), não "o vigente agora".
+  @Put('goals/:goalId/challenge-record')
+  recordCurrentChallenge(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('goalId', ParseUUIDPipe) goalId: string,
+    @Body() dto: RecordPeriodGoalDto,
+  ) {
+    return this.recordsService.recordCurrentChallenge(goalId, user.id, dto);
+  }
+
   // Histórico é público para leitura, como perfis/metas/pontos/streak
   // (CLAUDE.md seção 2 "Perfis").
   @Get('challenge-participants/:participantId/daily-history')

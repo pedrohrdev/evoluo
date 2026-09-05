@@ -1,6 +1,10 @@
 import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { GoalKind, GoalPeriod, ImportanceLevel, ParticipantStatus } from '@prisma/client';
-import { currentMonthRangeInSaoPaulo, currentWeekRangeInSaoPaulo, todayInSaoPaulo } from '../common/date/sao-paulo.util';
+import {
+  currentMonthRangeInSaoPaulo,
+  currentWeekRangeInSaoPaulo,
+  todayInSaoPaulo,
+} from '../common/date/sao-paulo.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { RecordsService } from './records.service';
 
@@ -10,6 +14,7 @@ describe('RecordsService', () => {
   let dailyRecordFindMany: jest.Mock;
   let weeklyRecordUpsert: jest.Mock;
   let monthlyRecordUpsert: jest.Mock;
+  let challengeRecordUpsert: jest.Mock;
   let participantFindUnique: jest.Mock;
   let dayResultFindMany: jest.Mock;
   let prisma: PrismaService;
@@ -35,6 +40,7 @@ describe('RecordsService', () => {
     dailyRecordFindMany = jest.fn();
     weeklyRecordUpsert = jest.fn();
     monthlyRecordUpsert = jest.fn();
+    challengeRecordUpsert = jest.fn();
     participantFindUnique = jest.fn();
     dayResultFindMany = jest.fn();
 
@@ -43,6 +49,7 @@ describe('RecordsService', () => {
       dailyRecord: { upsert: dailyRecordUpsert, findMany: dailyRecordFindMany },
       weeklyRecord: { upsert: weeklyRecordUpsert },
       monthlyRecord: { upsert: monthlyRecordUpsert },
+      challengeRecord: { upsert: challengeRecordUpsert },
       challengeParticipant: { findUnique: participantFindUnique },
       dayResult: { findMany: dayResultFindMany },
     } as unknown as PrismaService;
@@ -301,6 +308,119 @@ describe('RecordsService', () => {
 
       await expect(service.recordCurrentMonth('g1', 'u1', { actualValue: 1 })).rejects.toThrow(BadRequestException);
       expect(monthlyRecordUpsert).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('recordCurrentChallenge', () => {
+    // Datas relativas a "hoje" (em vez de literais fixas), para os testes
+    // continuarem válidos em qualquer dia em que a suíte rodar — mesmo
+    // padrão de recordCurrentWeek/Month, que também derivam o período
+    // esperado a partir de todayInSaoPaulo() no momento do teste.
+    const today = new Date(`${todayInSaoPaulo()}T12:00:00Z`);
+    function daysFromToday(offset: number): Date {
+      const date = new Date(today);
+      date.setUTCDate(date.getUTCDate() + offset);
+      return date;
+    }
+
+    it('upserts a challenge record keyed only by goalId, with periodStart = joinedAt and periodEnd = challenge.endDate', async () => {
+      const joinedAt = daysFromToday(-10); // entrou 10 dias atrás, num desafio de 30 dias
+      const challengeEndDate = daysFromToday(20);
+      goalFindUnique.mockResolvedValue({
+        id: 'g1',
+        periodType: GoalPeriod.challenge,
+        challengeParticipantId: 'p1',
+        challengeParticipant: {
+          ...activeParticipant,
+          joinedAt,
+          challenge: { endDate: challengeEndDate },
+        },
+        versions: [openHoursVersion],
+      });
+      challengeRecordUpsert.mockResolvedValue({ id: 'cr1', completed: false, pointsAwarded: 0 });
+
+      const result = await service.recordCurrentChallenge('g1', 'u1', { actualValue: 50 });
+
+      const expectedStart = new Date(todayInSaoPaulo(joinedAt));
+      const expectedEnd = new Date(challengeEndDate.toISOString().slice(0, 10));
+      expect(challengeRecordUpsert).toHaveBeenCalledWith({
+        where: { goalId: 'g1' },
+        create: {
+          goalId: 'g1',
+          goalVersionId: 'v1',
+          challengeParticipantId: 'p1',
+          periodStart: expectedStart,
+          periodEnd: expectedEnd,
+          actualValue: 50,
+          actualBoolean: undefined,
+          kind: GoalKind.hours,
+          importance: ImportanceLevel.high,
+          targetValueSnapshot: 2,
+        },
+        update: {
+          goalVersionId: 'v1',
+          actualValue: 50,
+          actualBoolean: null,
+          kind: GoalKind.hours,
+          importance: ImportanceLevel.high,
+          targetValueSnapshot: 2,
+        },
+      });
+      expect(result).toEqual({ id: 'cr1', completed: false, pointsAwarded: 0 });
+    });
+
+    it('reduces to the full challenge window for a participant who joined on the challenge start date', async () => {
+      const joinedAt = daysFromToday(-15);
+      const challengeEndDate = daysFromToday(15);
+      goalFindUnique.mockResolvedValue({
+        id: 'g1',
+        periodType: GoalPeriod.challenge,
+        challengeParticipantId: 'p1',
+        challengeParticipant: { ...activeParticipant, joinedAt, challenge: { endDate: challengeEndDate } },
+        versions: [openHoursVersion],
+      });
+      challengeRecordUpsert.mockResolvedValue({});
+
+      await service.recordCurrentChallenge('g1', 'u1', { actualValue: 50 });
+
+      expect(challengeRecordUpsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          create: expect.objectContaining({
+            periodStart: new Date(todayInSaoPaulo(joinedAt)),
+            periodEnd: new Date(challengeEndDate.toISOString().slice(0, 10)),
+          }),
+        }),
+      );
+    });
+
+    it('throws ForbiddenException when the challenge has already ended', async () => {
+      const joinedAt = daysFromToday(-40);
+      const challengeEndDate = daysFromToday(-10); // já passou
+      goalFindUnique.mockResolvedValue({
+        id: 'g1',
+        periodType: GoalPeriod.challenge,
+        challengeParticipant: { ...activeParticipant, joinedAt, challenge: { endDate: challengeEndDate } },
+        versions: [openHoursVersion],
+      });
+
+      await expect(service.recordCurrentChallenge('g1', 'u1', { actualValue: 1 })).rejects.toThrow(
+        ForbiddenException,
+      );
+      expect(challengeRecordUpsert).not.toHaveBeenCalled();
+    });
+
+    it('throws BadRequestException when the goal is not a duration goal', async () => {
+      goalFindUnique.mockResolvedValue({
+        id: 'g1',
+        periodType: GoalPeriod.monthly,
+        challengeParticipant: activeParticipant,
+        versions: [openHoursVersion],
+      });
+
+      await expect(service.recordCurrentChallenge('g1', 'u1', { actualValue: 1 })).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(challengeRecordUpsert).not.toHaveBeenCalled();
     });
   });
 
