@@ -166,4 +166,18 @@ describe('AnalyticsService', () => {
     expect(result.find((g) => g.id === 'g2')?.recordsCount).toBe(1);
     expect(result.find((g) => g.id === 'g3')?.recordsCount).toBe(0);
   });
+
+  it('never lets a null actual_value on a non-boolean record produce NaN/-Infinity (defensive: the DB trigger should always fill it in)', async () => {
+    participantFindUnique.mockResolvedValue({ id: 'p1' });
+    findAllForParticipant.mockResolvedValue([{ id: 'g1', periodType: GoalPeriod.daily, currentVersion: null }]);
+    dailyRecordFindMany.mockResolvedValue([
+      { goalId: 'g1', actualValue: null, actualBoolean: null, kind: GoalKind.quantity },
+    ]);
+
+    const result = await service.getParticipantAnalytics('p1');
+
+    expect(result[0].byKind).toEqual([
+      { kind: GoalKind.quantity, recordsCount: 1, sum: 0, average: 0, min: 0, max: 0 },
+    ]);
+  });
 });
