@@ -2,6 +2,7 @@
 
 import { use } from "react";
 import { AppShell } from "@/components/layout/app-shell";
+import { JoinCodeBadge } from "@/components/challenge/join-code-badge";
 import { EmptyState } from "@/components/ui/feedback";
 import { LoadingState } from "@/components/ui/feedback";
 import { ChallengeProvider, useChallenge } from "@/lib/challenge/challenge-context";
@@ -38,7 +39,11 @@ function ChallengeGate({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <AppShell challengeId={participation.challengeId} challengeName={participation.challengeName}>
+    <AppShell
+      challengeId={participation.challengeId}
+      challengeName={participation.challengeName}
+      headerExtra={<JoinCodeBadge challengeId={participation.challengeId} />}
+    >
       {children}
     </AppShell>
   );
