@@ -1,11 +1,11 @@
 import * as records from "./records";
 import type { GoalPeriod } from "./types";
 
-// Cada periodicidade tem seu próprio endpoint de registro (etapas 6/12/13)
-// — este mapa só evita um switch repetido nos componentes que registram
-// metas de qualquer periodicidade (ex.: o painel).
-export const RECORD_FN: Record<GoalPeriod, typeof records.recordDaily> = {
-  daily: records.recordDaily,
+// Metas semanais/mensais/de duração continuam com registro avulso, cada
+// uma no seu próprio endpoint (etapas 12/13) — só as diárias migraram
+// para o check-in único (records.checkInDaily, chamado à parte em
+// check-in-modal.tsx, nunca por este mapa).
+export const RECORD_FN: Record<Exclude<GoalPeriod, "daily">, typeof records.recordWeekly> = {
   weekly: records.recordWeekly,
   monthly: records.recordMonthly,
   challenge: records.recordChallenge,

@@ -21,6 +21,7 @@ Em `supabase/migrations/`, na ordem em que devem rodar:
 | `20260905090700_records.sql` | `daily_records`, `weekly_records`, `monthly_records`, `challenge_records` + triggers de cálculo e janela de edição |
 | `20260905090800_day_results_and_ledger.sql` | `day_results`, `points_ledger` + trigger de atualização tentativa |
 | `20260905090900_closing_jobs_and_cron.sql` | `close_daily_period`, `close_period_records` + agendamento `pg_cron` |
+| `20260906090000_instant_daily_checkin.sql` | `check_in_daily_period` — fechamento instantâneo do dia de hoje, chamado pelo participante ao concluir o check-in (ver seção "Fechamento instantâneo do check-in" abaixo) |
 
 Rodam com `supabase db push` (ou `supabase migration up` num projeto linkado) ou, num Postgres qualquer, com `psql -f` em ordem. Nenhuma foi pensada para rodar fora de ordem — cada uma assume que as anteriores já existem.
 
@@ -110,10 +111,17 @@ Todas as tabelas têm RLS habilitado. Padrão usado em todas: **leitura liberada
 | `upsert_day_result` | trigger `security definer` em `daily_records` | Mantém `day_results` atualizado "tentativamente" durante o dia (ex.: exibir "2/3 hoje"), sem nunca reabrir um dia já fechado |
 | `close_daily_period(date)` | função `security definer`, chamada pelo cron | Decide streak (mantém/quebra), grava `day_results` definitivo, credita pontos das metas diárias cumpridas — idempotente (**testado**: rodar duas vezes para o mesmo dia não duplica pontos nem re-processa) |
 | `close_period_records(text, date)` | função `security definer`, chamada pelo cron | Mesma lógica de fechamento para semanal/mensal/desafio, sem tocar em streak |
+| `check_in_daily_period(uuid)` | função `security definer`, chamada por `RecordsService.checkInDaily` (NestJS) | Fecha o dia de **hoje**, na hora, para um único participante — mesma lógica de `close_daily_period`, mas disparada pelo check-in do participante em vez de esperar o cron. Só pode ser chamada uma vez por dia por participante (rejeita se `day_results.closed` já for `true`) |
 
-## Fechamento de período (por que é um job, não algo reativo)
+## Fechamento de período (por que era só um job, e por que hoje também pode ser instantâneo)
 
-Um dia só pode ser avaliado como "3/3 ou não" depois que ele termina — decidir isso reativamente a cada registro faria o streak oscilar durante o próprio dia (ex.: cair pra 0 assim que a 1ª meta for lançada de manhã, antes do usuário ter tido a chance de fazer as outras duas). Por isso: `upsert_day_result` mantém um contador tentativo em tempo real (bom para a UI mostrar progresso), e só `close_daily_period`, rodando uma vez por dia via `pg_cron` depois da meia-noite em `America/Sao_Paulo`, decide de fato o streak — nesse ponto o dia já não aceita mais edições (trigger de janela), então o cálculo é definitivo. O mesmo padrão vale para semanal/mensal/desafio via `close_period_records`.
+Um dia só pode ser avaliado como "3/3 ou não" depois que ele termina **se o registro ainda puder ser editado livremente até lá** — decidir isso reativamente a cada registro faria o streak oscilar durante o próprio dia (ex.: subir de manhã e cair de tarde se o participante corrigisse um valor). Esse era o desenho original: `upsert_day_result` mantém um contador tentativo em tempo real (bom para a UI mostrar progresso, ex. "2/3 hoje"), e só `close_daily_period`, rodando uma vez por dia via `pg_cron` depois da meia-noite em `America/Sao_Paulo`, decidia de fato o streak.
+
+**Mudança de regra confirmada com o usuário**: o registro diário deixou de ser livremente editável até a virada do dia e passou a ser um **check-in único por dia** (ver `apps/web/src/components/goals/check-in-modal.tsx`) — o participante preenche o que quiser das metas diárias/opcionais e envia tudo de uma vez; depois de enviado, não é possível registrar de novo nesse dia. Isso remove o próprio motivo da oscilação (não existe mais "corrigir depois" no mesmo dia), então ficou seguro decidir streak e pontos **na hora do check-in**, em vez de esperar a virada do dia: `check_in_daily_period` roda a mesma lógica de `close_daily_period`, mas para um participante só e para hoje, chamada dentro da mesma transação que grava os `daily_records` do check-in.
+
+`close_daily_period` continua existindo e rodando à noite, sem nenhuma alteração — ela é quem fecha o dia de quem **não fez** check-in (fica 0/3 automático, regra original inalterada). A trava de idempotência que já existia nela (`already_closed`) garante que ela nunca reprocessa quem já foi fechado instantaneamente por `check_in_daily_period`.
+
+Metas semanais/mensais/de desafio **não** entraram nessa mudança: continuam podendo ser atualizadas livremente até o fim do próprio período (não têm streak, então nunca houve o problema de oscilação), e seus pontos continuam sendo creditados só no fechamento de período via `close_period_records` — não dá pra saber se a meta foi cumprida antes do período realmente acabar.
 
 Agendamento (horários em UTC, já que `pg_cron` roda no fuso do servidor e `America/Sao_Paulo` é UTC-3 o ano todo):
 

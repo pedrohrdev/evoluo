@@ -20,6 +20,10 @@ describe('RecordsService', () => {
   let challengeRecordFindMany: jest.Mock;
   let participantFindUnique: jest.Mock;
   let dayResultFindMany: jest.Mock;
+  let dayResultFindUnique: jest.Mock;
+  let txDailyRecordUpsert: jest.Mock;
+  let executeRaw: jest.Mock;
+  let transactionMock: jest.Mock;
   let prisma: PrismaService;
   let service: RecordsService;
 
@@ -49,6 +53,12 @@ describe('RecordsService', () => {
     challengeRecordFindMany = jest.fn();
     participantFindUnique = jest.fn();
     dayResultFindMany = jest.fn();
+    dayResultFindUnique = jest.fn();
+    txDailyRecordUpsert = jest.fn();
+    executeRaw = jest.fn();
+    transactionMock = jest.fn((cb: (tx: unknown) => unknown) =>
+      cb({ dailyRecord: { upsert: txDailyRecordUpsert }, $executeRaw: executeRaw }),
+    );
 
     prisma = {
       goal: { findUnique: goalFindUnique },
@@ -57,171 +67,176 @@ describe('RecordsService', () => {
       monthlyRecord: { upsert: monthlyRecordUpsert, findMany: monthlyRecordFindMany },
       challengeRecord: { upsert: challengeRecordUpsert, findMany: challengeRecordFindMany },
       challengeParticipant: { findUnique: participantFindUnique },
-      dayResult: { findMany: dayResultFindMany },
+      dayResult: { findMany: dayResultFindMany, findUnique: dayResultFindUnique },
+      $transaction: transactionMock,
     } as unknown as PrismaService;
 
     service = new RecordsService(prisma);
   });
 
-  it('upserts a daily record for an hours/quantity goal using actualValue', async () => {
-    goalFindUnique.mockResolvedValue({
+  // checkInDaily substituiu recordToday (etapa original) depois da mudança
+  // de regra confirmada com o usuário: registro diário deixou de ser
+  // upsert livre até a virada do dia e passou a ser um único envio por dia
+  // ("check-in"), que já fecha o dia (streak/pontos) na hora — ver
+  // CLAUDE.md seção "Streak" e docs/database-schema.md.
+  describe('checkInDaily', () => {
+    const dailyGoal = {
       id: 'g1',
       periodType: GoalPeriod.daily,
       challengeParticipantId: 'p1',
       challengeParticipant: activeParticipant,
       versions: [openHoursVersion],
-    });
-    dailyRecordUpsert.mockResolvedValue({ id: 'r1', completed: false, pointsAwarded: 0 });
-
-    const result = await service.recordToday('g1', 'u1', { actualValue: 1.5 });
-
-    const today = new Date(todayInSaoPaulo());
-    expect(dailyRecordUpsert).toHaveBeenCalledWith({
-      where: { goalId_recordDate: { goalId: 'g1', recordDate: today } },
-      create: {
-        goalId: 'g1',
-        goalVersionId: 'v1',
-        challengeParticipantId: 'p1',
-        recordDate: today,
-        actualValue: 1.5,
-        actualBoolean: undefined,
-        kind: GoalKind.hours,
-        importance: ImportanceLevel.high,
-        targetValueSnapshot: 2,
-      },
-      update: {
-        goalVersionId: 'v1',
-        actualValue: 1.5,
-        actualBoolean: null,
-        kind: GoalKind.hours,
-        importance: ImportanceLevel.high,
-        targetValueSnapshot: 2,
-      },
-    });
-    expect(result).toEqual({ id: 'r1', completed: false, pointsAwarded: 0 });
-  });
-
-  it('upserts a daily record for a boolean goal using actualBoolean', async () => {
-    goalFindUnique.mockResolvedValue({
+    };
+    const booleanGoal = {
       id: 'g2',
       periodType: GoalPeriod.daily,
       challengeParticipantId: 'p1',
       challengeParticipant: activeParticipant,
       versions: [openBooleanVersion],
-    });
-    dailyRecordUpsert.mockResolvedValue({ id: 'r2', completed: true, pointsAwarded: 20 });
+    };
 
-    await service.recordToday('g2', 'u1', { actualBoolean: true });
-
-    expect(dailyRecordUpsert).toHaveBeenCalledWith(
-      expect.objectContaining({
-        create: expect.objectContaining({ actualBoolean: true, actualValue: undefined }),
-      }),
-    );
-  });
-
-  it('throws NotFoundException when the goal does not exist', async () => {
-    goalFindUnique.mockResolvedValue(null);
-
-    await expect(service.recordToday('missing', 'u1', { actualValue: 1 })).rejects.toThrow(NotFoundException);
-    expect(dailyRecordUpsert).not.toHaveBeenCalled();
-  });
-
-  it('throws ForbiddenException when the goal belongs to another participant', async () => {
-    goalFindUnique.mockResolvedValue({
-      id: 'g1',
-      periodType: GoalPeriod.daily,
-      challengeParticipant: { ...activeParticipant, userId: 'someone-else' },
-      versions: [openHoursVersion],
+    beforeEach(() => {
+      participantFindUnique.mockResolvedValue({ id: 'p1', userId: 'u1', status: ParticipantStatus.active });
+      dayResultFindUnique.mockResolvedValue(null);
+      dailyRecordFindMany.mockResolvedValue([]);
+      weeklyRecordFindMany.mockResolvedValue([]);
+      monthlyRecordFindMany.mockResolvedValue([]);
+      challengeRecordFindMany.mockResolvedValue([]);
     });
 
-    await expect(service.recordToday('g1', 'u1', { actualValue: 1 })).rejects.toThrow(ForbiddenException);
-    expect(dailyRecordUpsert).not.toHaveBeenCalled();
-  });
-
-  it('throws BadRequestException when the goal is not daily', async () => {
-    goalFindUnique.mockResolvedValue({
-      id: 'g1',
-      periodType: GoalPeriod.weekly,
-      challengeParticipant: activeParticipant,
-      versions: [openHoursVersion],
-    });
-
-    await expect(service.recordToday('g1', 'u1', { actualValue: 1 })).rejects.toThrow(BadRequestException);
-    expect(dailyRecordUpsert).not.toHaveBeenCalled();
-  });
-
-  it('throws ForbiddenException when the participant already left the challenge', async () => {
-    goalFindUnique.mockResolvedValue({
-      id: 'g1',
-      periodType: GoalPeriod.daily,
-      challengeParticipant: { ...activeParticipant, status: ParticipantStatus.inactive },
-      versions: [openHoursVersion],
-    });
-
-    await expect(service.recordToday('g1', 'u1', { actualValue: 1 })).rejects.toThrow(ForbiddenException);
-    expect(dailyRecordUpsert).not.toHaveBeenCalled();
-  });
-
-  it('throws ConflictException when the goal has no open version', async () => {
-    goalFindUnique.mockResolvedValue({
-      id: 'g1',
-      periodType: GoalPeriod.daily,
-      challengeParticipant: activeParticipant,
-      versions: [],
-    });
-
-    await expect(service.recordToday('g1', 'u1', { actualValue: 1 })).rejects.toThrow(ConflictException);
-    expect(dailyRecordUpsert).not.toHaveBeenCalled();
-  });
-
-  describe('actual value/kind mismatches', () => {
-    it('rejects a boolean goal recorded without actualBoolean', async () => {
-      goalFindUnique.mockResolvedValue({
-        id: 'g2',
-        periodType: GoalPeriod.daily,
-        challengeParticipant: activeParticipant,
-        versions: [openBooleanVersion],
-      });
-
-      await expect(service.recordToday('g2', 'u1', {})).rejects.toThrow(BadRequestException);
-    });
-
-    it('rejects a boolean goal recorded with actualValue', async () => {
-      goalFindUnique.mockResolvedValue({
-        id: 'g2',
-        periodType: GoalPeriod.daily,
-        challengeParticipant: activeParticipant,
-        versions: [openBooleanVersion],
-      });
-
-      await expect(service.recordToday('g2', 'u1', { actualBoolean: true, actualValue: 1 })).rejects.toThrow(
-        BadRequestException,
+    it('upserts every provided daily record inside the transaction, then closes today via check_in_daily_period', async () => {
+      goalFindUnique.mockImplementation((args: { where: { id: string } }) =>
+        Promise.resolve(args.where.id === 'g1' ? dailyGoal : booleanGoal),
       );
-    });
 
-    it('rejects an hours goal recorded without actualValue', async () => {
-      goalFindUnique.mockResolvedValue({
-        id: 'g1',
-        periodType: GoalPeriod.daily,
-        challengeParticipant: activeParticipant,
-        versions: [openHoursVersion],
+      await service.checkInDaily('p1', 'u1', {
+        records: [
+          { goalId: 'g1', actualValue: 1.5 },
+          { goalId: 'g2', actualBoolean: true },
+        ],
       });
 
-      await expect(service.recordToday('g1', 'u1', {})).rejects.toThrow(BadRequestException);
-    });
-
-    it('rejects an hours goal recorded with actualBoolean', async () => {
-      goalFindUnique.mockResolvedValue({
-        id: 'g1',
-        periodType: GoalPeriod.daily,
-        challengeParticipant: activeParticipant,
-        versions: [openHoursVersion],
-      });
-
-      await expect(service.recordToday('g1', 'u1', { actualValue: 1, actualBoolean: true })).rejects.toThrow(
-        BadRequestException,
+      const today = new Date(todayInSaoPaulo());
+      expect(txDailyRecordUpsert).toHaveBeenCalledTimes(2);
+      expect(txDailyRecordUpsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { goalId_recordDate: { goalId: 'g1', recordDate: today } },
+          create: expect.objectContaining({ actualValue: 1.5, actualBoolean: undefined, kind: GoalKind.hours }),
+        }),
       );
+      expect(txDailyRecordUpsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { goalId_recordDate: { goalId: 'g2', recordDate: today } },
+          create: expect.objectContaining({ actualBoolean: true, actualValue: undefined, kind: GoalKind.boolean }),
+        }),
+      );
+      // A transação só fecha o dia depois de gravar os registros — chamada
+      // sempre por último, dentro do mesmo $transaction (atomicidade).
+      expect(executeRaw).toHaveBeenCalledTimes(1);
+    });
+
+    it('returns the fresh today state after checking in', async () => {
+      goalFindUnique.mockResolvedValue(dailyGoal);
+      const dailyRows = [{ id: 'dr1' }];
+      dailyRecordFindMany.mockResolvedValue(dailyRows);
+
+      const result = await service.checkInDaily('p1', 'u1', { records: [{ goalId: 'g1', actualValue: 1.5 }] });
+
+      expect(result).toEqual({ daily: dailyRows, weekly: [], monthly: [], challenge: [] });
+    });
+
+    it('allows an empty records array — check-in com nada preenchido ainda fecha hoje como 0/3', async () => {
+      await service.checkInDaily('p1', 'u1', { records: [] });
+
+      expect(txDailyRecordUpsert).not.toHaveBeenCalled();
+      expect(executeRaw).toHaveBeenCalledTimes(1);
+    });
+
+    it('throws ConflictException when today was already checked in', async () => {
+      dayResultFindUnique.mockResolvedValue({ closed: true });
+
+      await expect(
+        service.checkInDaily('p1', 'u1', { records: [{ goalId: 'g1', actualValue: 1 }] }),
+      ).rejects.toThrow(ConflictException);
+      expect(transactionMock).not.toHaveBeenCalled();
+    });
+
+    it('throws NotFoundException when the participant does not exist', async () => {
+      participantFindUnique.mockResolvedValue(null);
+
+      await expect(service.checkInDaily('missing', 'u1', { records: [] })).rejects.toThrow(NotFoundException);
+      expect(dayResultFindUnique).not.toHaveBeenCalled();
+    });
+
+    it('throws ForbiddenException when the participant belongs to another user', async () => {
+      participantFindUnique.mockResolvedValue({ id: 'p1', userId: 'someone-else', status: ParticipantStatus.active });
+
+      await expect(service.checkInDaily('p1', 'u1', { records: [] })).rejects.toThrow(ForbiddenException);
+    });
+
+    it('throws ForbiddenException when the participant already left the challenge', async () => {
+      participantFindUnique.mockResolvedValue({ id: 'p1', userId: 'u1', status: ParticipantStatus.inactive });
+
+      await expect(service.checkInDaily('p1', 'u1', { records: [] })).rejects.toThrow(ForbiddenException);
+    });
+
+    it('throws ForbiddenException when a goal in the payload belongs to a different participant', async () => {
+      goalFindUnique.mockResolvedValue({ ...dailyGoal, challengeParticipantId: 'p2' });
+
+      await expect(
+        service.checkInDaily('p1', 'u1', { records: [{ goalId: 'g1', actualValue: 1 }] }),
+      ).rejects.toThrow(ForbiddenException);
+      expect(transactionMock).not.toHaveBeenCalled();
+    });
+
+    it('throws BadRequestException when a goal in the payload is not daily', async () => {
+      goalFindUnique.mockResolvedValue({ ...dailyGoal, periodType: GoalPeriod.weekly });
+
+      await expect(
+        service.checkInDaily('p1', 'u1', { records: [{ goalId: 'g1', actualValue: 1 }] }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('throws ConflictException when a goal in the payload has no open version', async () => {
+      goalFindUnique.mockResolvedValue({ ...dailyGoal, versions: [] });
+
+      await expect(
+        service.checkInDaily('p1', 'u1', { records: [{ goalId: 'g1', actualValue: 1 }] }),
+      ).rejects.toThrow(ConflictException);
+    });
+
+    describe('actual value/kind mismatches', () => {
+      it('rejects a boolean goal recorded without actualBoolean', async () => {
+        goalFindUnique.mockResolvedValue(booleanGoal);
+
+        await expect(service.checkInDaily('p1', 'u1', { records: [{ goalId: 'g2' }] })).rejects.toThrow(
+          BadRequestException,
+        );
+      });
+
+      it('rejects a boolean goal recorded with actualValue', async () => {
+        goalFindUnique.mockResolvedValue(booleanGoal);
+
+        await expect(
+          service.checkInDaily('p1', 'u1', { records: [{ goalId: 'g2', actualBoolean: true, actualValue: 1 }] }),
+        ).rejects.toThrow(BadRequestException);
+      });
+
+      it('rejects an hours goal recorded without actualValue', async () => {
+        goalFindUnique.mockResolvedValue(dailyGoal);
+
+        await expect(service.checkInDaily('p1', 'u1', { records: [{ goalId: 'g1' }] })).rejects.toThrow(
+          BadRequestException,
+        );
+      });
+
+      it('rejects an hours goal recorded with actualBoolean', async () => {
+        goalFindUnique.mockResolvedValue(dailyGoal);
+
+        await expect(
+          service.checkInDaily('p1', 'u1', { records: [{ goalId: 'g1', actualValue: 1, actualBoolean: true }] }),
+        ).rejects.toThrow(BadRequestException);
+      });
     });
   });
 

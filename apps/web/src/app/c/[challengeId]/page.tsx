@@ -1,13 +1,16 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowRight, Settings2, Trophy } from "lucide-react";
+import { ArrowRight, ClipboardCheck, Settings2, Trophy } from "lucide-react";
 import Link from "next/link";
+import { useState } from "react";
 import { HeroStat } from "@/components/dashboard/hero-stat";
-import { GoalRecordCard } from "@/components/goals/goal-record-card";
+import { CheckInModal } from "@/components/goals/check-in-modal";
+import { GoalSummaryRow } from "@/components/goals/goal-summary-row";
 import { RankingList } from "@/components/ranking/ranking-list";
 import { StreakFlame } from "@/components/streak/streak-flame";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { ErrorState, LoadingState } from "@/components/ui/feedback";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import { Surface } from "@/components/ui/surface";
@@ -15,7 +18,7 @@ import { listGoals } from "@/lib/api/goals";
 import { getRanking } from "@/lib/api/ranking";
 import { getTodayState } from "@/lib/api/records";
 import { getStreak } from "@/lib/api/streak";
-import type { RecordEntry } from "@/lib/api/types";
+import type { GoalPeriod, RecordEntry, TodayState } from "@/lib/api/types";
 import { useChallenge } from "@/lib/challenge/challenge-context";
 import { useStreakFeedback } from "@/lib/challenge/use-streak-feedback";
 import { daysBetween } from "@/lib/format/format";
@@ -25,6 +28,7 @@ export default function DashboardPage() {
   const participantId = participation?.participantId;
   const challengeId = participation?.challengeId;
   const queryClient = useQueryClient();
+  const [checkInOpen, setCheckInOpen] = useState(false);
 
   const goalsQuery = useQuery({
     queryKey: ["goals", participantId],
@@ -73,11 +77,16 @@ export default function DashboardPage() {
   const monthly = goals.find((g) => g.periodType === "monthly");
   const duration = goals.find((g) => g.periodType === "challenge");
   const secondaryGoals = [weekly, monthly, duration].filter((g): g is NonNullable<typeof g> => !!g);
+  const checkInGoals = [...daily, ...secondaryGoals];
 
   const today = todayQuery.data!;
   const streak = streakQuery.data!;
   const completedToday = streak.today?.completedGoalsCount ?? 0;
   const dailyConfigured = daily.length >= 3;
+  // Só o check_in_daily_period (instantâneo) ou o job noturno de quem não
+  // fez check-in marcam closed=true para hoje — nos dois casos o dia já
+  // está decidido, então o botão de check-in some até amanhã.
+  const checkedInToday = streak.today?.closed ?? false;
 
   const dayNumber = Math.min(
     participation.durationDays,
@@ -86,17 +95,29 @@ export default function DashboardPage() {
 
   const ownPosition = rankingQuery.data?.find((e) => e.participantId === participantId)?.position;
 
-  function findRecord(list: RecordEntry[], goalId: string) {
-    return list.find((r) => r.goalId === goalId);
+  const recordsByGoalId = new Map<string, RecordEntry>();
+  for (const list of [today.daily, today.weekly, today.monthly, today.challenge]) {
+    for (const record of list) recordsByGoalId.set(record.goalId, record);
   }
 
-  function handleRecorded(period: "daily" | "weekly" | "monthly" | "challenge", record: RecordEntry) {
+  function handleRecorded(period: GoalPeriod, record: RecordEntry) {
     queryClient.setQueryData<typeof today>(["today", participantId], (current) => {
       if (!current) return current;
       const list = current[period];
       const withoutOld = list.filter((r) => r.goalId !== record.goalId);
       return { ...current, [period]: [...withoutOld, record] };
     });
+    void queryClient.invalidateQueries({ queryKey: ["streak", participantId] });
+    void queryClient.invalidateQueries({ queryKey: ["ranking", challengeId] });
+  }
+
+  // O check-in diário já fecha o dia no servidor (streak/pontos
+  // instantâneos) — troca o "hoje" pelo estado fresco devolvido pelo
+  // próprio check-in, e invalida streak/ranking pra refletir o
+  // fechamento (currentStreak, totalPoints e a posição no ranking podem
+  // ter mudado).
+  function handleDailyCheckedIn(freshToday: TodayState) {
+    queryClient.setQueryData(["today", participantId], freshToday);
     void queryClient.invalidateQueries({ queryKey: ["streak", participantId] });
     void queryClient.invalidateQueries({ queryKey: ["ranking", challengeId] });
   }
@@ -119,7 +140,7 @@ export default function DashboardPage() {
       </Surface>
 
       <section>
-        <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+        <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
           <div>
             <h2 className="font-display text-lg font-semibold text-ink">Hoje</h2>
             <p className="text-sm text-ink-muted">{completedToday}/3 metas diárias concluídas</p>
@@ -132,7 +153,17 @@ export default function DashboardPage() {
               <Settings2 className="size-4" aria-hidden />
               Configurar metas diárias
             </Link>
-          ) : null}
+          ) : checkedInToday ? (
+            <Badge tone="success" className="shrink-0 sm:self-start">
+              <ClipboardCheck className="size-3.5" aria-hidden />
+              Check-in de hoje concluído
+            </Badge>
+          ) : (
+            <Button size="sm" onClick={() => setCheckInOpen(true)} className="shrink-0 sm:self-start">
+              <ClipboardCheck className="size-4" aria-hidden />
+              Fazer check-in
+            </Button>
+          )}
         </div>
         <ProgressBar value={(completedToday / 3) * 100} tone={completedToday === 3 ? "success" : "accent"} className="mb-4" />
 
@@ -143,12 +174,7 @@ export default function DashboardPage() {
         ) : (
           <div className="flex flex-col gap-2">
             {daily.map((goal) => (
-              <GoalRecordCard
-                key={goal.id}
-                goal={goal}
-                record={findRecord(today.daily, goal.id)}
-                onRecorded={(record) => handleRecorded("daily", record)}
-              />
+              <GoalSummaryRow key={goal.id} goal={goal} record={recordsByGoalId.get(goal.id)} />
             ))}
           </div>
         )}
@@ -168,19 +194,9 @@ export default function DashboardPage() {
             </Surface>
           ) : (
             <div className="flex flex-col gap-2">
-              {secondaryGoals.map((goal) => {
-                const source = { weekly: today.weekly, monthly: today.monthly, challenge: today.challenge }[
-                  goal.periodType as "weekly" | "monthly" | "challenge"
-                ];
-                return (
-                  <GoalRecordCard
-                    key={goal.id}
-                    goal={goal}
-                    record={findRecord(source, goal.id)}
-                    onRecorded={(record) => handleRecorded(goal.periodType as "weekly" | "monthly" | "challenge", record)}
-                  />
-                );
-              })}
+              {secondaryGoals.map((goal) => (
+                <GoalSummaryRow key={goal.id} goal={goal} record={recordsByGoalId.get(goal.id)} />
+              ))}
             </div>
           )}
         </section>
@@ -202,6 +218,18 @@ export default function DashboardPage() {
           </Surface>
         </section>
       </div>
+
+      {dailyConfigured && !checkedInToday ? (
+        <CheckInModal
+          open={checkInOpen}
+          onOpenChange={setCheckInOpen}
+          participantId={participantId!}
+          goals={checkInGoals}
+          recordsByGoalId={recordsByGoalId}
+          onRecorded={handleRecorded}
+          onDailyCheckedIn={handleDailyCheckedIn}
+        />
+      ) : null}
     </div>
   );
 }

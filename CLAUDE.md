@@ -101,7 +101,7 @@ Existem dois valores armazenados por participante:
 
 O maior streak é apenas informativo e **não** influencia o ranking.
 
-O fechamento do dia (decisão de streak) roda uma única vez, via job agendado, depois que o dia já virou passado e não aceita mais edições — nunca é decidido em tempo real a cada registro, para o streak não oscilar visualmente durante o dia.
+O registro das metas diárias é feito por **check-in único por dia**: o participante abre "Fazer check-in", preenche o que quiser das metas diárias (+ semanal/mensal/duração, se existirem) e envia tudo de uma vez — depois de enviado, não é possível registrar de novo naquele dia (nem parcialmente, nem para corrigir um valor). Por isso o fechamento do dia (decisão de streak) acontece **na hora que o check-in é enviado**, não precisa esperar o dia virar passado: sem edição posterior possível no mesmo dia, não existe risco de o streak oscilar (subir e descer) até a meia-noite. Quem não faz check-in num dia é fechado como 0/3 automático pelo job agendado noturno, do jeito que já era antes.
 
 ### Ranking
 

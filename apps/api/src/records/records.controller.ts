@@ -2,7 +2,7 @@ import { Body, Controller, Get, Param, ParseUUIDPipe, Put, UseGuards } from '@ne
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { SupabaseAuthGuard } from '../auth/guards/supabase-auth.guard';
 import { AuthenticatedUser } from '../auth/interfaces/authenticated-user.interface';
-import { RecordDailyGoalDto } from './dto/record-daily-goal.dto';
+import { CheckInDailyDto } from './dto/check-in-daily.dto';
 import { RecordPeriodGoalDto } from './dto/record-period-goal.dto';
 import { RecordsService } from './records.service';
 
@@ -11,20 +11,25 @@ import { RecordsService } from './records.service';
 export class RecordsController {
   constructor(private readonly recordsService: RecordsService) {}
 
-  // PUT (não POST): registrar o valor de hoje é um upsert idempotente — a
-  // mesma requisição reenviada no mesmo dia substitui o valor, nunca
-  // duplica pontos. Não existe parâmetro de data: é sempre "hoje".
-  @Put('goals/:goalId/daily-record')
-  recordToday(
+  // PUT (não POST): concluir o check-in de hoje é uma operação idempotente
+  // do ponto de vista de retry de rede (reenviar a mesma requisição não
+  // duplica pontos), mas só pode ser feita UMA VEZ por dia por participante
+  // (CLAUDE.md seção "Streak") — chamadas seguintes no mesmo dia são
+  // rejeitadas pelo service. Não existe parâmetro de data: é sempre "hoje".
+  @Put('challenge-participants/:participantId/daily-check-in')
+  checkInDaily(
     @CurrentUser() user: AuthenticatedUser,
-    @Param('goalId', ParseUUIDPipe) goalId: string,
-    @Body() dto: RecordDailyGoalDto,
+    @Param('participantId', ParseUUIDPipe) participantId: string,
+    @Body() dto: CheckInDailyDto,
   ) {
-    return this.recordsService.recordToday(goalId, user.id, dto);
+    return this.recordsService.checkInDaily(participantId, user.id, dto);
   }
 
-  // Mesmo padrão de recordToday, para o período semanal vigente (segunda a
-  // domingo). Também sem parâmetro de período: é sempre o que contém hoje.
+  // Metas semanais/mensais/de duração NÃO entraram na regra de "check-in
+  // único por dia" — continuam podendo ser atualizadas livremente até o
+  // fim do próprio período (upsert idempotente por goalId, sem streak
+  // envolvido, sem risco de oscilação). Também sem parâmetro de período: é
+  // sempre o que contém hoje.
   @Put('goals/:goalId/weekly-record')
   recordCurrentWeek(
     @CurrentUser() user: AuthenticatedUser,

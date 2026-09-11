@@ -3,21 +3,19 @@
 import { BarChart3 } from "lucide-react";
 import { AnalyticsView } from "@/components/analytics/analytics-view";
 import { PageHeader } from "@/components/layout/page-header";
-import { useChallenge } from "@/lib/challenge/challenge-context";
+import { useProfileParticipation } from "@/lib/profile/profile-participation-context";
 
-export default function AnalyticsPage() {
-  const { participation } = useChallenge();
-  const participantId = participation?.participantId;
+export default function ProfileChallengeAnalyticsPage() {
+  const { participation } = useProfileParticipation();
 
   return (
-    <div className="mx-auto max-w-3xl">
+    <div>
       <PageHeader
         icon={BarChart3}
         title="Análises"
         description="Valores reais registrados, mesmo quando a meta não foi concluída."
       />
-
-      {participantId ? <AnalyticsView participantId={participantId} /> : null}
+      <AnalyticsView participantId={participation!.participantId} />
     </div>
   );
 }

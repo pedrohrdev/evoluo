@@ -78,7 +78,7 @@ export default function ProfilePage() {
             {profile.challenges.map((c) => (
               <li key={c.participantId}>
                 <Link
-                  href={`/c/${c.challengeId}`}
+                  href={isOwn ? `/c/${c.challengeId}` : `/profiles/${id}/challenges/${c.challengeId}`}
                   className="flex items-center justify-between gap-3 rounded-md border border-line bg-surface-1 px-4 py-3.5 transition-colors hover:border-line-strong"
                 >
                   <div className="min-w-0">

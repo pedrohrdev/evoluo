@@ -35,7 +35,10 @@ export default function OnboardingPage() {
   function handleEnteredChallenge(challengeId: string) {
     play("joined");
     void queryClient.invalidateQueries({ queryKey: profileQueryKey(session?.userId ?? "") });
-    router.push(`/c/${challengeId}`);
+    // Tanto quem cria quanto quem entra com código cai direto na tela de
+    // configuração das metas — nunca no painel vazio. O painel só faz
+    // sentido depois que pelo menos as 3 metas diárias existirem.
+    router.push(`/c/${challengeId}/setup`);
   }
 
   if (!isReady) return null;
