@@ -13,12 +13,20 @@ export function getProfile(id: string) {
   return apiFetch<PublicProfile>(`/profiles/${id}`);
 }
 
+type OwnProfile = Pick<PublicProfile, "id" | "displayName" | "avatarUrl" | "createdAt" | "updatedAt">;
+
 export function getOwnProfile() {
-  return apiFetch<Pick<PublicProfile, "id" | "displayName" | "avatarUrl" | "createdAt" | "updatedAt">>(
-    "/profiles/me",
-  );
+  return apiFetch<OwnProfile>("/profiles/me");
 }
 
-export function updateOwnProfile(input: { displayName?: string; avatarUrl?: string }) {
-  return apiFetch<PublicProfile>("/profiles/me", { method: "PATCH", body: input });
+export function updateOwnProfile(input: { displayName?: string }) {
+  return apiFetch<OwnProfile>("/profiles/me", { method: "PATCH", body: input });
+}
+
+// Upload de verdade (multipart), não uma URL avulsa — o backend valida
+// tipo/tamanho e sobe pro Supabase Storage antes de gravar avatar_url.
+export function uploadAvatar(file: File) {
+  const formData = new FormData();
+  formData.append("file", file);
+  return apiFetch<OwnProfile>("/profiles/me/avatar", { method: "POST", body: formData });
 }
