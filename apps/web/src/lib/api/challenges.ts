@@ -20,3 +20,9 @@ export function joinChallenge(joinCode: string) {
 export function getChallenge(id: string) {
   return apiFetch<Challenge>(`/challenges/${id}`);
 }
+
+// Hard-delete total (só o criador) — apaga o desafio e cascateia para
+// todos os participantes, sem volta. Ver ChallengesService.remove (API).
+export function deleteChallenge(id: string) {
+  return apiFetch<void>(`/challenges/${id}`, { method: "DELETE" });
+}

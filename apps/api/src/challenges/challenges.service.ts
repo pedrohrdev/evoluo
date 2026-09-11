@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateChallengeDto } from './dto/create-challenge.dto';
@@ -75,5 +75,38 @@ export class ChallengesService {
       }
       throw error;
     }
+  }
+
+  // Hard-delete total, confirmado com o usuário: só o criador pode apagar,
+  // e a exclusão cascateia para TODOS os participantes (challenge_participants
+  // e tudo que pendura nela — goals, records, day_results, points_ledger —
+  // via "on delete cascade"), não só para o próprio criador. Diferente de
+  // "sair do desafio" (que só marca o vínculo como inativo e preserva tudo):
+  // aqui o desafio deixa de existir de vez, inclusive no perfil público de
+  // quem participou.
+  //
+  // goal_versions normalmente nunca pode ser apagado (histórico imutável,
+  // trg_prevent_goal_version_delete) — a flag local abaixo é a única forma
+  // de destravar esse delete em cascata, e só existe aqui, depois que já
+  // validamos que quem pediu é o dono. Ver
+  // supabase/migrations/20260911090000_delete_challenge.sql.
+  async remove(challengeId: string, userId: string): Promise<void> {
+    const challenge = await this.prisma.challenge.findUnique({
+      where: { id: challengeId },
+      select: { id: true, createdBy: true },
+    });
+
+    if (!challenge) {
+      throw new NotFoundException('Desafio não encontrado.');
+    }
+
+    if (challenge.createdBy !== userId) {
+      throw new ForbiddenException('Só quem criou o desafio pode deletá-lo.');
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`select set_config('app.bypass_goal_version_immutability', 'on', true)`;
+      await tx.challenge.delete({ where: { id: challengeId } });
+    });
   }
 }
