@@ -277,6 +277,45 @@ describe('regras no banco (integração)', () => {
     });
   });
 
+  // Complementa a correção do job noturno (migration 20260912090000): aquela
+  // impede CRIAR dias anteriores ao início; o filtro em RecordsService.getHistory
+  // impede EXIBIR os que já existem. Este teste prova o cenário real que
+  // apareceu em produção — 3 participantes com um dia 0/3 dois dias antes do
+  // desafio começar.
+  describe('dias anteriores ao início do desafio', () => {
+    it('o job noturno não cria, e um já existente fica fora da janela de leitura', async () => {
+      const user = await createUser(client, 'Ana');
+      const { challengeId, participantId } = await createChallenge(client, user);
+      await client.query('update challenges set start_date = current_date where id = $1', [challengeId]);
+
+      // Simula a linha que o bug antigo deixou: ontem, antes do início.
+      await client.query(
+        `insert into day_results (challenge_participant_id, result_date, completed_goals_count, day_completed, streak_after, closed)
+         values ($1, current_date - 1, 0, false, 0, true)`,
+        [participantId],
+      );
+
+      // O job não acrescenta mais nenhuma (é o que a migration garante).
+      await client.query(`select close_daily_period((current_date - 1)::date)`);
+      const { rows: total } = await client.query(
+        'select count(*)::int as n from day_results where challenge_participant_id = $1',
+        [participantId],
+      );
+      expect(total[0].n).toBe(1);
+
+      // E a consulta que a tela de histórico faz não devolve a antiga.
+      const { rows: visiveis } = await client.query(
+        `select count(*)::int as n
+         from day_results dr
+         join challenge_participants cp on cp.id = dr.challenge_participant_id
+         join challenges c on c.id = cp.challenge_id
+         where dr.challenge_participant_id = $1 and dr.closed = true and dr.result_date >= c.start_date`,
+        [participantId],
+      );
+      expect(visiveis[0].n).toBe(0);
+    });
+  });
+
   describe('ranking', () => {
     it('ordena por streak, depois pontos, depois dias concluídos', async () => {
       const ana = await createUser(client, 'Ana');

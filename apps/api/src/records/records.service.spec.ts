@@ -599,8 +599,12 @@ describe('RecordsService', () => {
   });
 
   describe('getHistory', () => {
+    // startDate bem no passado: os testes abaixo exercitam dias dentro do
+    // desafio. O corte por início tem teste próprio.
+    const withChallenge = { id: 'p1', challenge: { startDate: new Date('2020-01-01') } };
+
     it('returns only closed days, each with its matching records, most recent first', async () => {
-      participantFindUnique.mockResolvedValue({ id: 'p1' });
+      participantFindUnique.mockResolvedValue(withChallenge);
       const day1 = new Date('2026-01-02');
       const day2 = new Date('2026-01-01');
       dayResultFindMany.mockResolvedValue([
@@ -614,7 +618,11 @@ describe('RecordsService', () => {
       const result = await service.getHistory('p1');
 
       expect(dayResultFindMany).toHaveBeenCalledWith({
-        where: { challengeParticipantId: 'p1', closed: true },
+        where: {
+          challengeParticipantId: 'p1',
+          closed: true,
+          resultDate: { gte: new Date('2020-01-01') },
+        },
         orderBy: { resultDate: 'desc' },
       });
       expect(dailyRecordFindMany).toHaveBeenCalledWith({
@@ -638,7 +646,7 @@ describe('RecordsService', () => {
     // registro já gravado. O título vem da VERSÃO referenciada pelo
     // registro, não da versão vigente da meta.
     it('reports the goal title as it was at record time, not the current one', async () => {
-      participantFindUnique.mockResolvedValue({ id: 'p1' });
+      participantFindUnique.mockResolvedValue(withChallenge);
       const day = new Date('2026-01-02');
       dayResultFindMany.mockResolvedValue([
         { resultDate: day, completedGoalsCount: 1, dayCompleted: false, streakAfter: 0 },
@@ -654,7 +662,7 @@ describe('RecordsService', () => {
     });
 
     it('groups every record of the same day together (a real day has all 3 mandatory daily goals)', async () => {
-      participantFindUnique.mockResolvedValue({ id: 'p1' });
+      participantFindUnique.mockResolvedValue(withChallenge);
       const day1 = new Date('2026-01-02');
       dayResultFindMany.mockResolvedValue([
         { resultDate: day1, completedGoalsCount: 3, dayCompleted: true, streakAfter: 5 },
@@ -674,11 +682,25 @@ describe('RecordsService', () => {
     });
 
     it('returns an empty list when there are no closed days yet, without querying daily_records', async () => {
-      participantFindUnique.mockResolvedValue({ id: 'p1' });
+      participantFindUnique.mockResolvedValue(withChallenge);
       dayResultFindMany.mockResolvedValue([]);
 
       await expect(service.getHistory('p1')).resolves.toEqual([]);
       expect(dailyRecordFindMany).not.toHaveBeenCalled();
+    });
+
+    // Um dia anterior ao início do desafio é impossível por definição — o
+    // backend recusava check-in nessa data. Exibi-lo como "0/3, dia perdido"
+    // mostra uma derrota que não podia acontecer. O job noturno chegou a
+    // criar linhas assim antes da migration 20260912090000, e este filtro
+    // cobre as que sobraram.
+    it('never asks for days before the challenge started', async () => {
+      participantFindUnique.mockResolvedValue({ id: 'p1', challenge: { startDate: new Date('2026-09-13') } });
+      dayResultFindMany.mockResolvedValue([]);
+
+      await service.getHistory('p1');
+
+      expect(dayResultFindMany.mock.calls[0][0].where.resultDate).toEqual({ gte: new Date('2026-09-13') });
     });
 
     it('throws NotFoundException when the participant does not exist', async () => {
