@@ -96,3 +96,38 @@ Uma etapa só é marcada como `[x]` depois de implementada, testada, integrada a
   Migration `20260912090000_challenge_window_and_closing_catchup.sql`. Testes: 171 passando (18 suítes), 26 novos.
 
   **Pendente de decisão do usuário antes do deploy**: aplicar a migration roda `close_open_daily_periods` na próxima noite. Se houver dias em aberto em produção hoje, eles serão fechados — o que pode quebrar streaks que estão intactos apenas porque o fechamento nunca rodou. Ver a seção correspondente na PR.
+
+- [x] **24. Check-in seguro e histórico fiel (Fase 2 da auditoria)**
+  `CheckInModal` tratava metas diárias E de período: registrar a meta semanal fechava o dia e zerava o streak de quem só queria lançar as horas da semana. Separado em `PeriodGoalModal`, com registro a partir da própria linha da meta. O check-in passou a prever o resultado no cliente (mesma regra do trigger), mostrar "N de 3 metas cumpridas" ao vivo e exigir uma segunda confirmação que nomeia a consequência ("isso zera seu streak de 12 dias e não tem como desfazer").
+
+  `getHistory` passou a devolver o título da `goal_version` referenciada pelo registro — antes o frontend usava o título vigente, então renomear a meta reescrevia todo o histórico, violando a regra da seção "Histórico" do CLAUDE.md. O histórico também passou a mostrar o alvo da época.
+
+  Contador de dia corrigido (era UTC do navegador, adiantava um dia entre 21h e a meia-noite); barra fixa de check-in na zona do polegar em mobile; passada de copy (plurais, jargão de cron, pontos por importância que nunca apareceram em tela).
+
+- [x] **25. Ciclo do produto: convite, encerramento e lembrete (Fase 3 da auditoria)**
+  **Convite**: `GET /challenges/preview/:joinCode` (única rota sem autenticação do app, com limite próprio) e página pública `/join/[code]`, para o link abrir para quem ainda não tem conta. Login/cadastro honram `?next=` (só caminhos internos). `JoinCodeBadge` passou a compartilhar o link, com Web Share API no celular.
+
+  **Encerramento**: passado o `end_date`, o painel vira `ChallengeResult` — pódio final, maior streak, dias completos, totais reais acumulados (do analytics) e "criar a revanche". Antes o produto não tinha fim: o contador travava em "30/30" e o botão de check-in continuava lá.
+
+  **Landing** em `/`, que antes redirecionava direto para o login sem uma linha sobre o que é o produto.
+
+  **Transparência de metas**: `GET /goals/:goalId/versions` e o marcador "editada há N dias". Decisão de negócio confirmada com o usuário: a edição continua valendo **imediatamente**, inclusive para o dia em curso (ver CLAUDE.md seção 2) — a proposta de adiar o efeito para o dia seguinte foi descartada porque puniria quem troca de meta de manhã querendo cumpri-la no mesmo dia.
+
+  **Lembrete diário**: `RemindersService` + `POST /reminders/daily`, protegida por segredo compartilhado (fechada por padrão). Envio plugável: sem `RESEND_API_KEY`/`REMINDER_FROM_EMAIL` o disparo vira no-op com log, para a rota poder ir a produção antes da credencial existir.
+
+  187 testes passando (19 suítes).
+
+- [x] **27. Testes de integração contra Postgres real (Fase 5 da auditoria)**
+  Fecha a maior lacuna de qualidade apontada na auditoria: cumprimento de meta, pontuação, streak, janela de edição, imutabilidade do histórico e idempotência do fechamento são decididos por **triggers e funções do PostgreSQL**, não pelo NestJS — e os 200 testes unitários mockam o `PrismaService`, então nenhum deles tocava numa linha dessa lógica. A cobertura de 94% media a casca.
+
+  Harness em `apps/api/test/integration/`: `supabase-shim.sql` reproduz num Postgres puro o mínimo do ambiente Supabase de que as migrations dependem (roles `anon`/`authenticated`, schema `auth` com `users` e `auth.uid()`, schema `storage`, stub de `pg_cron`); `db.ts` aplica shim + todas as migrations de `supabase/migrations` em ordem numa base descartável e oferece helpers de seed; `global-setup.ts` sobe um **Postgres 18 embarcado** (`embedded-postgres`) quando `DATABASE_URL_TEST` não está definida.
+
+  Essa última decisão é o que torna a suíte utilizável: a limitação registrada desde a etapa 3 era "não é possível testar contra um Postgres real neste ambiente (sem Docker/Supabase CLI)". O `embedded-postgres` distribui o binário via npm, então o mesmo caminho roda na máquina de quem desenvolve e no CI, sem Docker. **A limitação de ambiente da etapa 20 deixa de valer.**
+
+  22 testes em 2 suítes, cobrindo: cumprimento a partir do alvo sem proporcionalidade, ausência de bônus por exceder (o exemplo literal do enunciado), escala de `points_config` por importância, impossibilidade de o cliente forjar `completed`/`points_awarded`, janela de edição, check-in 3/3 e 2/3, dupla chamada barrada, recusa antes do início e depois do fim do desafio, idempotência do fechamento noturno, o bug do fechamento antes de `start_date` (P1-5), recuperação de noites perdidas, imutabilidade de `goal_versions` mesmo como superusuário, snapshot preservado após edição da meta, teto de 3 metas diárias e a ordenação do ranking.
+
+  CI em `.github/workflows/ci.yml`: um job de build/lint/testes unitários e outro que roda as migrations reais e exercita o SQL.
+
+  Comando: `npm run api:test:int`.
+
+  **Itens da Fase 5 deliberadamente não feitos** (ver relatório final): verificação local do JWT no guard (P1-7) — mexe em autenticação de um app com usuários reais e não deve ser feita às pressas; paginação de histórico/ranking; recorte temporal em analytics.
