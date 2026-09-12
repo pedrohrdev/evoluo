@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Pencil, Swords } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Avatar } from "@/components/profile/avatar";
 import { EditProfileModal } from "@/components/profile/edit-profile-modal";
 import { HeroStat } from "@/components/dashboard/hero-stat";
@@ -32,10 +32,23 @@ export default function ProfilePage() {
     enabled: isReady,
   });
 
+  const isOwn = session?.userId === id;
+
+  // Perfil de outra pessoa com um único desafio: pula a listagem (que só
+  // teria 1 item pra clicar) e vai direto pras metas dele — pedido do
+  // usuário. router.replace (não push) pra essa página nunca fique presa
+  // no histórico entre o desafio e quem visitou o perfil (ver comentário
+  // em profiles/[id]/challenges/[challengeId]/layout.tsx sobre o mesmo
+  // cuidado com histórico duplicado).
+  useEffect(() => {
+    if (!isOwn && profile && profile.challenges.length === 1) {
+      router.replace(`/profiles/${id}/challenges/${profile.challenges[0].challengeId}`);
+    }
+  }, [isOwn, profile, id, router]);
+
   if (!isReady || isLoading) return <LoadingState label="Carregando perfil…" />;
   if (isError || !profile) return <ErrorState message="Não foi possível carregar este perfil." onRetry={() => void refetch()} />;
-
-  const isOwn = session?.userId === id;
+  if (!isOwn && profile.challenges.length === 1) return <LoadingState label="Carregando perfil…" />;
   const bestStreak = Math.max(0, ...profile.challenges.map((c) => c.currentStreak));
   const totalPoints = profile.challenges.reduce((sum, c) => sum + c.totalPoints, 0);
 
