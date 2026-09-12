@@ -11,7 +11,12 @@ import { EmptyState, ErrorState, LoadingState } from "@/components/ui/feedback";
 import { Surface } from "@/components/ui/surface";
 import { ApiError } from "@/lib/api/client";
 import { getRanking } from "@/lib/api/ranking";
-import { cancelSpecialGoal, completeSpecialGoal, listSpecialGoals } from "@/lib/api/special-goals";
+import {
+  cancelSpecialGoal,
+  completeSpecialGoal,
+  declineSpecialGoal,
+  listSpecialGoals,
+} from "@/lib/api/special-goals";
 import { useChallenge } from "@/lib/challenge/challenge-context";
 import { useToast } from "@/lib/toast/toast-context";
 
@@ -47,6 +52,8 @@ export default function SpecialGoalsPage() {
 
   function invalidate() {
     void queryClient.invalidateQueries({ queryKey: ["special-goals", challengeId] });
+    // O badge da navegação conta pendentes — resolver uma precisa apagá-lo.
+    void queryClient.invalidateQueries({ queryKey: ["special-goals-pending", participantId] });
   }
 
   const completeMutation = useMutation({
@@ -56,6 +63,15 @@ export default function SpecialGoalsPage() {
       invalidate();
     },
     onError: (err) => notify(err instanceof ApiError ? err.message : "Não foi possível concluir.", "danger"),
+  });
+
+  const declineMutation = useMutation({
+    mutationFn: (id: string) => declineSpecialGoal(id),
+    onSuccess: () => {
+      notify("Meta especial recusada.", "success");
+      invalidate();
+    },
+    onError: (err) => notify(err instanceof ApiError ? err.message : "Não foi possível recusar.", "danger"),
   });
 
   const cancelMutation = useMutation({
@@ -78,8 +94,8 @@ export default function SpecialGoalsPage() {
     <div className="mx-auto max-w-2xl">
       <PageHeader
         icon={Gift}
-        title="Metas especiais"
-        description="Uma pessoa atribui, a outra cumpre quando quiser. Não vale ponto, não mexe no streak nem no ranking — é só entre vocês."
+        title="Entre amigos"
+        description="Você manda uma tarefa para alguém, a pessoa cumpre ou recusa quando quiser. Não vale ponto e não mexe no streak nem no ranking — é só entre vocês."
       />
 
       <div className="mb-4 flex justify-end">
@@ -116,11 +132,13 @@ export default function SpecialGoalsPage() {
                   goal={goal}
                   fromName={nameByParticipantId.get(goal.fromParticipantId) ?? "Participante"}
                   toName={nameByParticipantId.get(goal.toParticipantId) ?? "Participante"}
-                  canComplete={goal.status === "pending" && goal.toParticipantId === participantId}
+                  canResolve={goal.status === "pending" && goal.toParticipantId === participantId}
                   canCancel={goal.status === "pending" && goal.fromParticipantId === participantId}
                   onComplete={() => completeMutation.mutate(goal.id)}
+                  onDecline={() => declineMutation.mutate(goal.id)}
                   onCancel={() => cancelMutation.mutate(goal.id)}
                   completing={completeMutation.isPending && completeMutation.variables === goal.id}
+                  declining={declineMutation.isPending && declineMutation.variables === goal.id}
                   cancelling={cancelMutation.isPending && cancelMutation.variables === goal.id}
                 />
               ))}

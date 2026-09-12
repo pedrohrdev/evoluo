@@ -7,6 +7,7 @@ import { AuthModule } from './auth/auth.module';
 import { ChallengesModule } from './challenges/challenges.module';
 import { UserThrottlerGuard } from './common/throttler/user-throttler.guard';
 import { validateEnv } from './config/env.validation';
+import { FeedModule } from './feed/feed.module';
 import { GoalsModule } from './goals/goals.module';
 import { PointsModule } from './points/points.module';
 import { PrismaModule } from './prisma/prisma.module';
@@ -36,6 +37,7 @@ import { SupabaseModule } from './supabase/supabase.module';
     ProfilesModule,
     ChallengesModule,
     GoalsModule,
+    FeedModule,
     RecordsModule,
     PointsModule,
     StreakModule,

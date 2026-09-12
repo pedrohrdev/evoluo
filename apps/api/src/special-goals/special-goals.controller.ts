@@ -31,6 +31,18 @@ export class SpecialGoalsController {
     return this.specialGoalsService.complete(id, user.id);
   }
 
+  @Patch('special-goals/:id/decline')
+  decline(@CurrentUser() user: AuthenticatedUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.specialGoalsService.decline(id, user.id);
+  }
+
+  // Contador para o badge na navegação — o que torna a funcionalidade
+  // descobrível sem carregar a lista inteira.
+  @Get('challenge-participants/:participantId/special-goals/pending-count')
+  countPending(@Param('participantId', ParseUUIDPipe) participantId: string) {
+    return this.specialGoalsService.countPendingFor(participantId);
+  }
+
   @Patch('special-goals/:id/cancel')
   cancel(@CurrentUser() user: AuthenticatedUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.specialGoalsService.cancel(id, user.id);

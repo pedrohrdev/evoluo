@@ -5,7 +5,8 @@ export type GoalPeriod = "daily" | "weekly" | "monthly" | "challenge";
 export type GoalKind = "hours" | "quantity" | "boolean";
 export type Importance = "low" | "medium" | "high";
 export type ParticipantStatus = "active" | "inactive";
-export type SpecialGoalStatus = "pending" | "completed" | "cancelled";
+// `declined`: o alvo pode recusar, não só cumprir (etapa 26).
+export type SpecialGoalStatus = "pending" | "completed" | "cancelled" | "declined";
 
 // Sem joinCode de propósito: o código é o único controle de acesso de
 // entrada no desafio e o id do desafio é público (aparece no perfil de
@@ -190,6 +191,7 @@ export interface SpecialGoal {
   status: SpecialGoalStatus;
   completedAt: string | null;
   cancelledAt: string | null;
+  declinedAt: string | null;
   createdAt: string;
 }
 
@@ -198,4 +200,31 @@ export interface TodayState {
   weekly: RecordEntry[];
   monthly: RecordEntry[];
   challenge: RecordEntry[];
+}
+
+// Evento do feed do desafio. Derivado de day_results e special_goals — não
+// existe tabela de feed (ver FeedService no backend).
+export type FeedEventType = "day_completed" | "day_missed" | "special_goal_created" | "special_goal_resolved";
+
+export interface FeedEvent {
+  type: FeedEventType;
+  at: string;
+  actorUserId: string;
+  actorName: string;
+  targetName?: string;
+  streak?: number;
+  title?: string;
+  status?: SpecialGoalStatus;
+}
+
+export interface DaySeriesEntry {
+  resultDate: string;
+  completedGoalsCount: number;
+  dayCompleted: boolean;
+}
+
+export interface DaySeries {
+  startDate: string;
+  endDate: string;
+  days: DaySeriesEntry[];
 }

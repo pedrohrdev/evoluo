@@ -16,3 +16,17 @@ export function completeSpecialGoal(specialGoalId: string) {
 export function cancelSpecialGoal(specialGoalId: string) {
   return apiFetch<SpecialGoal>(`/special-goals/${specialGoalId}/cancel`, { method: "PATCH" });
 }
+
+// Recusar: contrapartida de concluir, só para quem recebeu. Sem ela a meta
+// especial era de mão única — nada pode ser apagado, então quem recebia não
+// tinha saída nenhuma.
+export function declineSpecialGoal(id: string) {
+  return apiFetch<SpecialGoal>(`/special-goals/${id}/decline`, { method: "PATCH" });
+}
+
+// Contador para o badge da navegação, sem carregar a lista inteira.
+export function getPendingSpecialGoalsCount(participantId: string) {
+  return apiFetch<{ participantId: string; pending: number }>(
+    `/challenge-participants/${participantId}/special-goals/pending-count`,
+  );
+}

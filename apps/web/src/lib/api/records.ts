@@ -1,5 +1,5 @@
 import { apiFetch } from "./client";
-import type { DailyHistoryDay, RecordEntry, TodayState } from "./types";
+import type { DailyHistoryDay, DaySeries, RecordEntry, TodayState } from "./types";
 
 export interface RecordInput {
   actualValue?: number;
@@ -36,4 +36,10 @@ export function getDailyHistory(participantId: string) {
 
 export function getTodayState(participantId: string) {
   return apiFetch<TodayState>(`/challenge-participants/${participantId}/today`);
+}
+
+// Série compacta para o heatmap (uma célula por dia fechado) — separada do
+// histórico, que carrega também todos os registros de cada dia.
+export function getDaySeries(participantId: string) {
+  return apiFetch<DaySeries>(`/challenge-participants/${participantId}/day-series`);
 }
