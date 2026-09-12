@@ -5,7 +5,6 @@ import { Check, History as HistoryIcon, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/feedback";
 import { Surface } from "@/components/ui/surface";
-import { listGoals } from "@/lib/api/goals";
 import { getDailyHistory } from "@/lib/api/records";
 import { formatDateLong, formatValueForKind } from "@/lib/format/format";
 
@@ -19,17 +18,11 @@ export function DailyHistoryView({ participantId }: { participantId: string }) {
     queryKey: ["daily-history", participantId],
     queryFn: () => getDailyHistory(participantId),
   });
-  const goalsQuery = useQuery({
-    queryKey: ["goals", participantId],
-    queryFn: () => listGoals(participantId),
-  });
-
-  if (historyQuery.isLoading || goalsQuery.isLoading) return <LoadingState label="Carregando histórico…" />;
+  if (historyQuery.isLoading) return <LoadingState label="Carregando histórico…" />;
   if (historyQuery.isError) {
     return <ErrorState message="Não foi possível carregar o histórico." onRetry={() => void historyQuery.refetch()} />;
   }
 
-  const titleByGoal = new Map((goalsQuery.data ?? []).map((g) => [g.id, g.currentVersion?.title ?? "Meta"]));
   const days = historyQuery.data ?? [];
 
   if (days.length === 0) {
@@ -37,7 +30,7 @@ export function DailyHistoryView({ participantId }: { participantId: string }) {
       <EmptyState
         icon={HistoryIcon}
         title="Ainda sem dias fechados"
-        description="O primeiro dia aparece aqui assim que o fechamento diário rodar."
+        description="Seu primeiro dia aparece aqui depois da meia-noite."
       />
     );
   }
@@ -63,14 +56,17 @@ export function DailyHistoryView({ participantId }: { participantId: string }) {
                       ) : (
                         <X className="size-3.5 shrink-0 text-danger" aria-hidden />
                       )}
-                      <span className="truncate">{titleByGoal.get(record.goalId) ?? "Meta"}</span>
+                      <span className="truncate">{record.title}</span>
                     </span>
                     <span className="shrink-0 tabular-nums text-ink-faint">
                       {record.kind === "boolean"
                         ? record.actualBoolean
                           ? "sim"
                           : "não"
-                        : formatValueForKind(record.kind, record.actualValue)}
+                        : `${formatValueForKind(record.kind, record.actualValue)} de ${formatValueForKind(
+                            record.kind,
+                            record.targetValueSnapshot,
+                          )}`}
                     </span>
                   </li>
                 ))}

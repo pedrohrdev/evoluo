@@ -607,8 +607,9 @@ describe('RecordsService', () => {
         { resultDate: day1, completedGoalsCount: 3, dayCompleted: true, streakAfter: 2 },
         { resultDate: day2, completedGoalsCount: 1, dayCompleted: false, streakAfter: 0 },
       ]);
+      // goalVersion é achatado em `title` pelo service — ver getHistory.
       const recordDay1 = { id: 'r1', recordDate: day1, completed: true, pointsAwarded: 30 };
-      dailyRecordFindMany.mockResolvedValue([recordDay1]);
+      dailyRecordFindMany.mockResolvedValue([{ ...recordDay1, goalVersion: { title: 'Ler 30 páginas' } }]);
 
       const result = await service.getHistory('p1');
 
@@ -619,11 +620,37 @@ describe('RecordsService', () => {
       expect(dailyRecordFindMany).toHaveBeenCalledWith({
         where: { challengeParticipantId: 'p1', recordDate: { in: [day1, day2] } },
         orderBy: { recordDate: 'desc' },
+        include: { goalVersion: { select: { title: true } } },
       });
       expect(result).toEqual([
-        { date: day1, completedGoalsCount: 3, dayCompleted: true, streakAfter: 2, records: [recordDay1] },
+        {
+          date: day1,
+          completedGoalsCount: 3,
+          dayCompleted: true,
+          streakAfter: 2,
+          records: [{ ...recordDay1, title: 'Ler 30 páginas' }],
+        },
         { date: day2, completedGoalsCount: 1, dayCompleted: false, streakAfter: 0, records: [] },
       ]);
+    });
+
+    // A promessa do CLAUDE.md seção "Histórico": editar a meta não altera
+    // registro já gravado. O título vem da VERSÃO referenciada pelo
+    // registro, não da versão vigente da meta.
+    it('reports the goal title as it was at record time, not the current one', async () => {
+      participantFindUnique.mockResolvedValue({ id: 'p1' });
+      const day = new Date('2026-01-02');
+      dayResultFindMany.mockResolvedValue([
+        { resultDate: day, completedGoalsCount: 1, dayCompleted: false, streakAfter: 0 },
+      ]);
+      dailyRecordFindMany.mockResolvedValue([
+        { id: 'r1', recordDate: day, completed: true, pointsAwarded: 30, goalVersion: { title: 'Ler 30 páginas' } },
+      ]);
+
+      const result = await service.getHistory('p1');
+
+      expect(result[0].records[0]).toMatchObject({ title: 'Ler 30 páginas' });
+      expect(result[0].records[0]).not.toHaveProperty('goalVersion');
     });
 
     it('groups every record of the same day together (a real day has all 3 mandatory daily goals)', async () => {
@@ -632,10 +659,12 @@ describe('RecordsService', () => {
       dayResultFindMany.mockResolvedValue([
         { resultDate: day1, completedGoalsCount: 3, dayCompleted: true, streakAfter: 5 },
       ]);
-      const recordA = { id: 'r1', recordDate: day1, completed: true, pointsAwarded: 30 };
-      const recordB = { id: 'r2', recordDate: day1, completed: true, pointsAwarded: 20 };
-      const recordC = { id: 'r3', recordDate: day1, completed: true, pointsAwarded: 10 };
-      dailyRecordFindMany.mockResolvedValue([recordA, recordB, recordC]);
+      const recordA = { id: 'r1', recordDate: day1, completed: true, pointsAwarded: 30, title: 'A' };
+      const recordB = { id: 'r2', recordDate: day1, completed: true, pointsAwarded: 20, title: 'B' };
+      const recordC = { id: 'r3', recordDate: day1, completed: true, pointsAwarded: 10, title: 'C' };
+      dailyRecordFindMany.mockResolvedValue(
+        [recordA, recordB, recordC].map(({ title, ...rest }) => ({ ...rest, goalVersion: { title } })),
+      );
 
       const result = await service.getHistory('p1');
 

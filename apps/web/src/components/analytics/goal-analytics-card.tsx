@@ -3,7 +3,7 @@ import { ProgressBar } from "@/components/ui/progress-bar";
 import { Surface } from "@/components/ui/surface";
 import type { GoalAnalytics } from "@/lib/api/types";
 import { GOAL_KIND_LABEL, GOAL_PERIOD_LABEL } from "@/lib/domain/labels";
-import { formatNumber, formatValueForKind } from "@/lib/format/format";
+import { formatNumber, formatValueForKind, pluralize } from "@/lib/format/format";
 
 export function GoalAnalyticsCard({ analytics }: { analytics: GoalAnalytics }) {
   const title = analytics.currentVersion?.title ?? "Meta";
@@ -24,7 +24,7 @@ export function GoalAnalyticsCard({ analytics }: { analytics: GoalAnalytics }) {
             <div key={agg.kind}>
               <div className="mb-1.5 flex items-center justify-between text-xs text-ink-muted">
                 <span>{GOAL_KIND_LABEL[agg.kind]}</span>
-                <span>{agg.recordsCount} registro(s)</span>
+                <span>{pluralize(agg.recordsCount, "registro", "registros")}</span>
               </div>
 
               {agg.kind === "boolean" ? (

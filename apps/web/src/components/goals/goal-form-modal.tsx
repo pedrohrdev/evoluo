@@ -26,7 +26,18 @@ const PERIOD_LABEL: Record<GoalPeriod, string> = {
   daily: "Meta diária",
   weekly: "Meta semanal",
   monthly: "Meta mensal",
-  challenge: "Meta de duração do desafio",
+  challenge: "Meta final do desafio",
+};
+
+// Os valores existiam em points_config e em GET /points-config desde a etapa
+// 7, e nenhuma tela jamais os mostrou: "importância" era escolhida às cegas.
+// Fixos aqui porque a tabela é configuração estável (CLAUDE.md seção 2), não
+// dado de runtime — se mudar, muda junto.
+const IMPORTANCE_POINTS_HINT: Record<GoalPeriod, string> = {
+  daily: "Alta 30 pts · Média 20 · Baixa 10 por dia cumprido. Não muda o streak.",
+  weekly: "Alta 90 pts · Média 60 · Baixa 30 por semana cumprida. Não muda o streak.",
+  monthly: "Alta 120 pts · Média 80 · Baixa 40 por mês cumprido. Não muda o streak.",
+  challenge: "Alta 150 pts · Média 100 · Baixa 50 se cumprir. Não muda o streak.",
 };
 
 export function GoalFormModal({
@@ -105,7 +116,7 @@ export function GoalFormModal({
             />
           </Field>
         ) : null}
-        <Field label="Importância" htmlFor="goal-importance" hint="Afeta os pontos, nunca o streak.">
+        <Field label="Quanto vale" htmlFor="goal-importance" hint={IMPORTANCE_POINTS_HINT[periodType]}>
           <Segmented label="Importância" options={IMPORTANCE_OPTIONS} value={importance} onChange={setImportance} />
         </Field>
         {error ? (

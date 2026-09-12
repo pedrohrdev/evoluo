@@ -146,7 +146,10 @@ export interface DailyHistoryDay {
   completedGoalsCount: number;
   dayCompleted: boolean;
   streakAfter: number | null;
-  records: (RecordEntry & { recordDate: string })[];
+  // `title` é o título da meta NO MOMENTO do registro (vem de
+  // goal_versions pela goal_version_id), nunca o título atual — renomear a
+  // meta não pode reescrever o histórico (CLAUDE.md seção "Histórico").
+  records: (RecordEntry & { recordDate: string; title: string })[];
 }
 
 export interface KindAggregate {

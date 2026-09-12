@@ -9,6 +9,7 @@ import { ErrorState, LoadingState } from "@/components/ui/feedback";
 import { GoalFormModal } from "@/components/goals/goal-form-modal";
 import { GoalSlot } from "@/components/goals/goal-slot";
 import { listGoals } from "@/lib/api/goals";
+import { pluralize } from "@/lib/format/format";
 import type { Goal, GoalPeriod } from "@/lib/api/types";
 import { useChallenge } from "@/lib/challenge/challenge-context";
 
@@ -79,7 +80,7 @@ export default function GoalsSetupPage() {
           />
           <GoalSlot
             goal={duration}
-            placeholderLabel="Meta de duração do desafio"
+            placeholderLabel="Meta final do desafio"
             optional
             onEdit={() => setEditing({ periodType: "challenge", goal: duration })}
           />
@@ -94,7 +95,7 @@ export default function GoalsSetupPage() {
               <span className="text-ink">Metas diárias configuradas.</span>
             </>
           ) : (
-            <span className="text-ink-muted">Faltam {3 - daily.length} meta(s) diária(s).</span>
+            <span className="text-ink-muted">Faltam {pluralize(3 - daily.length, "meta diária", "metas diárias")}.</span>
           )}
         </div>
         <Button disabled={!dailyComplete} onClick={() => router.push(`/c/${challengeId}`)} className="w-full sm:w-auto">

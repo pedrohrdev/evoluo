@@ -7,6 +7,7 @@ import { useState } from "react";
 import { HeroStat } from "@/components/dashboard/hero-stat";
 import { CheckInModal } from "@/components/goals/check-in-modal";
 import { GoalSummaryRow } from "@/components/goals/goal-summary-row";
+import { PeriodGoalModal } from "@/components/goals/period-goal-modal";
 import { PodiumCard } from "@/components/ranking/podium-card";
 import { RankingList } from "@/components/ranking/ranking-list";
 import { StreakFlame } from "@/components/streak/streak-flame";
@@ -19,10 +20,11 @@ import { listGoals } from "@/lib/api/goals";
 import { getRanking } from "@/lib/api/ranking";
 import { getTodayState } from "@/lib/api/records";
 import { getStreak } from "@/lib/api/streak";
-import type { GoalPeriod, RecordEntry, TodayState } from "@/lib/api/types";
+import type { Goal, GoalPeriod, RecordEntry, TodayState } from "@/lib/api/types";
 import { useChallenge } from "@/lib/challenge/challenge-context";
 import { useStreakFeedback } from "@/lib/challenge/use-streak-feedback";
-import { daysBetween, formatDate } from "@/lib/format/format";
+import { cn } from "@/lib/cn";
+import { daysBetween, formatDate, todayInSaoPaulo } from "@/lib/format/format";
 
 export default function DashboardPage() {
   const { participation } = useChallenge();
@@ -30,6 +32,9 @@ export default function DashboardPage() {
   const challengeId = participation?.challengeId;
   const queryClient = useQueryClient();
   const [checkInOpen, setCheckInOpen] = useState(false);
+  // Meta de período sendo registrada (null = modal fechado). Fora do
+  // check-in de propósito — ver period-goal-modal.tsx.
+  const [periodGoal, setPeriodGoal] = useState<Goal | null>(null);
 
   const goalsQuery = useQuery({
     queryKey: ["goals", participantId],
@@ -78,7 +83,6 @@ export default function DashboardPage() {
   const monthly = goals.find((g) => g.periodType === "monthly");
   const duration = goals.find((g) => g.periodType === "challenge");
   const secondaryGoals = [weekly, monthly, duration].filter((g): g is NonNullable<typeof g> => !!g);
-  const checkInGoals = [...daily, ...secondaryGoals];
 
   const today = todayQuery.data!;
   const streak = streakQuery.data!;
@@ -94,12 +98,19 @@ export default function DashboardPage() {
   // registro/check-in antes disso (backend); aqui é só refletir esse
   // estado na UI em vez de mostrar "Dia 1" e um botão de check-in que
   // falharia ao ser clicado.
-  const daysUntilStart = daysBetween(new Date().toISOString(), participation.startDate);
+  // Tudo em America/Sao_Paulo, o mesmo relógio do fechamento no servidor —
+  // com a data UTC do navegador, o contador adiantava um dia entre 21h e a
+  // meia-noite, e na véspera do início o painel liberava um check-in que o
+  // backend recusava.
+  // `today` (acima) é o ESTADO do dia vindo da API; esta é a DATA de hoje.
+  const todayDate = todayInSaoPaulo();
+  const daysUntilStart = daysBetween(todayDate, participation.startDate);
   const hasStarted = daysUntilStart <= 0;
+  const hasEnded = daysBetween(todayDate, participation.endDate) < 0;
 
   const dayNumber = Math.min(
     participation.durationDays,
-    Math.max(1, daysBetween(participation.startDate, new Date().toISOString()) + 1),
+    Math.max(1, daysBetween(participation.startDate, todayDate) + 1),
   );
 
   const ownPosition = rankingQuery.data?.find((e) => e.participantId === participantId)?.position;
@@ -132,7 +143,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className={cn("flex flex-col gap-8", dailyConfigured && hasStarted && !hasEnded && !checkedInToday && "pb-16 sm:pb-0")}>
       <Surface className="grid grid-cols-2 gap-6 p-6 sm:grid-cols-4">
         <HeroStat label="Streak atual" value={<StreakFlame value={streak.currentStreak} size="lg" />} hint={`recorde: ${streak.longestStreak}`} />
         <HeroStat label="Pontos" value={participation.totalPoints} hint="total no desafio" />
@@ -184,10 +195,16 @@ export default function DashboardPage() {
               Check-in de hoje concluído
             </Badge>
           ) : (
-            <Button size="sm" onClick={() => setCheckInOpen(true)} className="shrink-0 sm:self-start">
-              <ClipboardCheck className="size-4" aria-hidden />
-              Fazer check-in
-            </Button>
+            // Em mobile quem assume é a barra fixa na zona do polegar (fim
+            // deste arquivo) — o wrapper esconde este botão em vez de uma
+            // classe `hidden` no próprio Button, porque `cn` é clsx puro
+            // (sem tailwind-merge) e o `inline-flex` da base venceria.
+            <div className="hidden shrink-0 sm:block sm:self-start">
+              <Button size="sm" onClick={() => setCheckInOpen(true)}>
+                <ClipboardCheck className="size-4" aria-hidden />
+                Fazer check-in
+              </Button>
+            </div>
           )}
         </div>
         {hasStarted ? (
@@ -227,7 +244,12 @@ export default function DashboardPage() {
           ) : (
             <div className="flex flex-col gap-2">
               {secondaryGoals.map((goal) => (
-                <GoalSummaryRow key={goal.id} goal={goal} record={recordsByGoalId.get(goal.id)} />
+                <GoalSummaryRow
+                  key={goal.id}
+                  goal={goal}
+                  record={recordsByGoalId.get(goal.id)}
+                  onRecord={hasStarted && !hasEnded ? () => setPeriodGoal(goal) : undefined}
+                />
               ))}
             </div>
           )}
@@ -251,17 +273,38 @@ export default function DashboardPage() {
         </section>
       </div>
 
-      {dailyConfigured && hasStarted && !checkedInToday ? (
+      {dailyConfigured && hasStarted && !hasEnded && !checkedInToday ? (
         <CheckInModal
           open={checkInOpen}
           onOpenChange={setCheckInOpen}
           participantId={participantId!}
-          goals={checkInGoals}
+          goals={daily}
           recordsByGoalId={recordsByGoalId}
-          onRecorded={handleRecorded}
+          currentStreak={streak.currentStreak}
           onDailyCheckedIn={handleDailyCheckedIn}
         />
       ) : null}
+
+      {/* Em mobile, a ação primária do produto ficava no topo da tela — a
+          região mais difícil de alcançar com o polegar — e abaixo da dobra
+          depois de 4 stats e do card de pódio. Esta barra fixa (acima da
+          BottomNavBar, respeitando a safe area) põe o check-in ao alcance
+          sem tirar o botão do seu lugar no fluxo em telas maiores. */}
+      {dailyConfigured && hasStarted && !hasEnded && !checkedInToday ? (
+        <div className="fixed inset-x-0 bottom-[calc(3.75rem+env(safe-area-inset-bottom))] z-20 border-t border-line bg-surface-0/95 px-4 py-3 backdrop-blur sm:hidden">
+          <Button onClick={() => setCheckInOpen(true)} className="w-full" size="lg">
+            <ClipboardCheck className="size-4" aria-hidden />
+            Fazer check-in · {completedToday}/3
+          </Button>
+        </div>
+      ) : null}
+
+      <PeriodGoalModal
+        goal={periodGoal}
+        record={periodGoal ? recordsByGoalId.get(periodGoal.id) : undefined}
+        onOpenChange={(open) => !open && setPeriodGoal(null)}
+        onRecorded={handleRecorded}
+      />
     </div>
   );
 }

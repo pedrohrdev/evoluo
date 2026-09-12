@@ -319,12 +319,23 @@ export class RecordsService {
       return [];
     }
 
+    // Inclui o título da VERSÃO que o registro referencia, não o título
+    // atual da meta.
+    //
+    // CLAUDE.md seção "Histórico" promete que alterações futuras em uma meta
+    // (inclusive o título) não alteram retroativamente registros já
+    // existentes — mas as tabelas de registro só guardam snapshot de
+    // kind/importance/target_value, nunca do título. O frontend resolvia o
+    // nome pela versão vigente, então renomear "Ler 30 páginas" para "Ler 5
+    // páginas" reescrevia todo o histórico passado. O dado correto sempre
+    // esteve em goal_versions, alcançável pela goal_version_id do registro.
     const records = await this.prisma.dailyRecord.findMany({
       where: {
         challengeParticipantId: participantId,
         recordDate: { in: dayResults.map((dayResult) => dayResult.resultDate) },
       },
       orderBy: { recordDate: 'desc' },
+      include: { goalVersion: { select: { title: true } } },
     });
 
     const recordsByDate = new Map<number, typeof records>();
@@ -343,7 +354,11 @@ export class RecordsService {
       completedGoalsCount: dayResult.completedGoalsCount,
       dayCompleted: dayResult.dayCompleted,
       streakAfter: dayResult.streakAfter,
-      records: recordsByDate.get(dayResult.resultDate.getTime()) ?? [],
+      records: (recordsByDate.get(dayResult.resultDate.getTime()) ?? []).map(({ goalVersion, ...record }) => ({
+        ...record,
+        // Achatado para o cliente não precisar conhecer goal_versions.
+        title: goalVersion.title,
+      })),
     }));
   }
 

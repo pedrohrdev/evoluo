@@ -19,7 +19,7 @@ export default function RankingPage() {
 
   return (
     <div className="mx-auto max-w-2xl">
-      <PageHeader icon={Trophy} title="Ranking" description="Streak atual → pontos → dias concluídos." />
+      <PageHeader icon={Trophy} title="Ranking" description="Quem tem o streak mais longo lidera. Empate desempata por pontos." />
 
       {isLoading ? <LoadingState label="Carregando ranking…" /> : null}
       {isError ? <ErrorState message="Não foi possível carregar o ranking." onRetry={() => void refetch()} /> : null}
