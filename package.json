@@ -16,6 +16,8 @@
     "web:build": "npm run build -w apps/web",
     "web:lint": "npm run lint -w apps/web",
     "web:typecheck": "npm run typecheck -w apps/web",
-    "api:test:int": "npm run test:int -w apps/api"
+    "api:test:int": "npm run test:int -w apps/api",
+    "db:push": "npx --yes supabase@latest db push --db-url \"$(grep -oP '(?<=^DATABASE_URL=\")[^\"]+' apps/api/.env)\"",
+    "db:status": "npx --yes supabase@latest migration list --db-url \"$(grep -oP '(?<=^DATABASE_URL=\")[^\"]+' apps/api/.env)\""
   }
 }
