@@ -18,6 +18,14 @@ class EnvironmentVariables {
   @IsNotEmpty()
   SUPABASE_SERVICE_ROLE_KEY!: string;
 
+  // Para onde o link do e-mail de recuperação de senha leva de volta (ex.:
+  // https://evoluo.app/reset-password). Opcional: sem ela, o Supabase usa a
+  // Site URL configurada no próprio projeto.
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  PASSWORD_RESET_REDIRECT_URL?: string;
+
   @IsOptional()
   @IsInt()
   @Min(1)

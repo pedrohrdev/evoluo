@@ -7,6 +7,10 @@ export type Importance = "low" | "medium" | "high";
 export type ParticipantStatus = "active" | "inactive";
 export type SpecialGoalStatus = "pending" | "completed" | "cancelled";
 
+// Sem joinCode de propósito: o código é o único controle de acesso de
+// entrada no desafio e o id do desafio é público (aparece no perfil de
+// qualquer participante), então GET /challenges/:id não o devolve mais.
+// Quem participa busca em GET /challenges/:id/join-code.
 export interface Challenge {
   id: string;
   name: string;
@@ -15,8 +19,12 @@ export interface Challenge {
   startDate: string;
   endDate: string;
   createdBy: string;
-  joinCode: string;
   createdAt: string;
+}
+
+export interface ChallengeJoinCode {
+  challengeId: string;
+  joinCode: string;
 }
 
 export interface GoalVersion {
@@ -94,6 +102,10 @@ export interface RankingEntry {
   position: number;
   participantId: string;
   userId: string;
+  // Vêm junto na resposta do ranking desde a etapa 23 — antes cada linha
+  // buscava o perfil inteiro do usuário só para mostrar uma inicial.
+  displayName: string | null;
+  avatarUrl: string | null;
   currentStreak: number;
   totalPoints: number;
   totalDaysCompleted: number;

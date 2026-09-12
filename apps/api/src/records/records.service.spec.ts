@@ -27,11 +27,14 @@ describe('RecordsService', () => {
   let prisma: PrismaService;
   let service: RecordsService;
 
+  // endDate bem no futuro: os testes abaixo exercitam o caminho feliz, em
+  // que o desafio está dentro da janela. A borda de fim tem testes próprios
+  // ("já terminou").
   const activeParticipant = {
     id: 'p1',
     userId: 'u1',
     status: ParticipantStatus.active,
-    challenge: { startDate: new Date('2020-01-01') },
+    challenge: { startDate: new Date('2020-01-01'), endDate: new Date('2999-12-31') },
   };
   const openHoursVersion = {
     id: 'v1',
@@ -105,7 +108,7 @@ describe('RecordsService', () => {
         id: 'p1',
         userId: 'u1',
         status: ParticipantStatus.active,
-        challenge: { startDate: new Date('2020-01-01') },
+        challenge: { startDate: new Date('2020-01-01'), endDate: new Date('2999-12-31') },
       });
       dayResultFindUnique.mockResolvedValue(null);
       dailyRecordFindMany.mockResolvedValue([]);
@@ -183,7 +186,7 @@ describe('RecordsService', () => {
         id: 'p1',
         userId: 'someone-else',
         status: ParticipantStatus.active,
-        challenge: { startDate: new Date('2020-01-01') },
+        challenge: { startDate: new Date('2020-01-01'), endDate: new Date('2999-12-31') },
       });
 
       await expect(service.checkInDaily('p1', 'u1', { records: [] })).rejects.toThrow(ForbiddenException);
@@ -194,7 +197,7 @@ describe('RecordsService', () => {
         id: 'p1',
         userId: 'u1',
         status: ParticipantStatus.inactive,
-        challenge: { startDate: new Date('2020-01-01') },
+        challenge: { startDate: new Date('2020-01-01'), endDate: new Date('2999-12-31') },
       });
 
       await expect(service.checkInDaily('p1', 'u1', { records: [] })).rejects.toThrow(ForbiddenException);
@@ -207,11 +210,48 @@ describe('RecordsService', () => {
         id: 'p1',
         userId: 'u1',
         status: ParticipantStatus.active,
-        challenge: { startDate: tomorrow },
+        challenge: { startDate: tomorrow, endDate: new Date('2999-12-31') },
       });
 
       await expect(service.checkInDaily('p1', 'u1', { records: [] })).rejects.toThrow(ForbiddenException);
       expect(dayResultFindUnique).not.toHaveBeenCalled();
+    });
+
+    // Etapa 23: a duração do desafio é fixa (CLAUDE.md seção 1) e nada
+    // verificava a ponta de fim. Sem isto, o check-in continuava creditando
+    // pontos e subindo streak depois do último dia — enquanto
+    // close_daily_period, que filtra por `p_date <= c.end_date`, já tinha
+    // parado de fechar os dias de quem NÃO fazia check-in.
+    it('throws ForbiddenException when the challenge has already ended', async () => {
+      const yesterday = new Date(`${todayInSaoPaulo()}T00:00:00Z`);
+      yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+      participantFindUnique.mockResolvedValue({
+        id: 'p1',
+        userId: 'u1',
+        status: ParticipantStatus.active,
+        challenge: { startDate: new Date('2020-01-01'), endDate: yesterday },
+      });
+
+      await expect(service.checkInDaily('p1', 'u1', { records: [] })).rejects.toThrow(ForbiddenException);
+      expect(dayResultFindUnique).not.toHaveBeenCalled();
+    });
+
+    it('allows the check-in on the very last day of the challenge', async () => {
+      const today = new Date(`${todayInSaoPaulo()}T00:00:00Z`);
+      participantFindUnique.mockResolvedValue({
+        id: 'p1',
+        userId: 'u1',
+        status: ParticipantStatus.active,
+        challenge: { startDate: new Date('2020-01-01'), endDate: today },
+      });
+      dayResultFindUnique.mockResolvedValue(null);
+      dailyRecordFindMany.mockResolvedValue([]);
+      weeklyRecordFindMany.mockResolvedValue([]);
+      monthlyRecordFindMany.mockResolvedValue([]);
+      challengeRecordFindMany.mockResolvedValue([]);
+
+      await expect(service.checkInDaily('p1', 'u1', { records: [] })).resolves.toBeDefined();
+      expect(executeRaw).toHaveBeenCalled();
     });
 
     it('throws ForbiddenException when a goal in the payload belongs to a different participant', async () => {
@@ -339,7 +379,27 @@ describe('RecordsService', () => {
       goalFindUnique.mockResolvedValue({
         id: 'g1',
         periodType: GoalPeriod.weekly,
-        challengeParticipant: { ...activeParticipant, challenge: { startDate: tomorrow } },
+        challengeParticipant: { ...activeParticipant, challenge: { startDate: tomorrow, endDate: new Date('2999-12-31') } },
+        versions: [openHoursVersion],
+      });
+
+      await expect(service.recordCurrentWeek('g1', 'u1', { actualValue: 1 })).rejects.toThrow(ForbiddenException);
+      expect(weeklyRecordUpsert).not.toHaveBeenCalled();
+    });
+
+    // Mesma regra para metas de período: a janela do registro é a semana/mês
+    // civil, que não tem relação nenhuma com o fim do desafio — então a
+    // checagem precisa existir aqui também, não só nos triggers do banco.
+    it('throws ForbiddenException when the challenge has already ended', async () => {
+      const yesterday = new Date(`${todayInSaoPaulo()}T00:00:00Z`);
+      yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+      goalFindUnique.mockResolvedValue({
+        id: 'g1',
+        periodType: GoalPeriod.weekly,
+        challengeParticipant: {
+          ...activeParticipant,
+          challenge: { startDate: new Date('2020-01-01'), endDate: yesterday },
+        },
         versions: [openHoursVersion],
       });
 

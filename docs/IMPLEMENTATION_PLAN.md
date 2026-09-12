@@ -75,3 +75,24 @@ Uma etapa só é marcada como `[x]` depois de implementada, testada, integrada a
   Backend: tabela `special_goals` nova (migration `20260911100000_special_goals.sql`, com trigger de mesmo-desafio e trigger de imutabilidade de transição de status, RLS com policies de select público/insert própria/complete pelo alvo/cancel por quem criou), módulo `SpecialGoalsModule` (create/list/complete/cancel), 10 testes unitários novos.
 
   Frontend: nova aba "Especiais" no desafio (`/c/[challengeId]/special-goals`) para criar, listar e concluir/cancelar; e, à parte (pedido separado do usuário na mesma etapa): card compacto de pódio (1º-3º) no painel do desafio, logo abaixo dos stats principais e acima de "Hoje" (foco em mobile).
+
+- [x] **23. Correções críticas (Fase 1 da auditoria)**
+  Primeira fase do plano de correções levantado na auditoria de produto e código. Nenhuma regra de negócio foi alterada — as mudanças fazem o código aplicar regras que já estavam em `CLAUDE.md` e que não eram cumpridas.
+
+  **Fim do desafio (P0-1)**: `RecordsService` só validava `start_date`; `enforce_daily_record_window` e `check_in_daily_period()` não conheciam `challenges` de jeito nenhum. Depois do `end_date` o participante continuava fechando dias, creditando pontos e subindo streak — enquanto `close_daily_period`, que filtra por `p_date <= c.end_date`, já tinha parado de fechar os dias de quem não fazia check-in, deixando as duas regras divergindo. `assertChallengeStarted` virou `assertChallengeWindow` (as duas pontas) e a mesma checagem foi para o banco.
+
+  **Rate limiting (P0-2)**: todo tráfego passa pelo rewrite `/api/*` do Next, então `req.ip` era sempre o do proxy e, sem `trust proxy`, `req.ips` ficava vazio — os limites de 60 req/min e 5 logins/min valiam para todos os usuários somados. Adicionados `trust proxy` e `UserThrottlerGuard`, que separa por usuário.
+
+  **Código de convite (P0-3)**: `GET /challenges/:id` devolvia a linha inteira, `join_code` incluído, para qualquer autenticado — e o id do desafio é público (aparece no perfil de qualquer participante). Dava para ler os desafios de alguém pelo perfil e entrar em todos. O código passou para `GET /challenges/:id/join-code`, restrito a participantes.
+
+  **Recuperação de senha (P0-4)**: não existia. `POST /auth/forgot-password` e `POST /auth/reset-password`, mais as telas `/forgot-password` e `/reset-password`.
+
+  **Sair do desafio (P0-5)**: a regra estava documentada e o banco inteiro a suportava, mas não havia endpoint nem botão. `POST /challenges/:id/leave` + item no menu de configurações.
+
+  **Perfil e avatares (P1-11, P1-4)**: um redirect tornava a página de perfil de outra pessoa inalcançável, e `<Avatar>` só era usado em 2 telas — ranking e pódio buscavam o perfil inteiro e desenhavam a inicial à mão. O ranking passou a devolver `displayName`/`avatarUrl` (o que também elimina o N+1), o redirect virou link, e a visão do desafio ganhou aba "Perfil".
+
+  **Fechamento noturno (P1-5, P1-10)**: `close_daily_period` fechava dias anteriores a `start_date`; e o cron sempre chamou `close_daily_period(ontem)`, então uma noite perdida deixava o dia aberto para sempre. Nova `close_open_daily_periods()`, que recupera em ordem cronológica e pula participantes cujo streak seria corrompido por reprocessamento fora de ordem.
+
+  Migration `20260912090000_challenge_window_and_closing_catchup.sql`. Testes: 171 passando (18 suítes), 26 novos.
+
+  **Pendente de decisão do usuário antes do deploy**: aplicar a migration roda `close_open_daily_periods` na próxima noite. Se houver dias em aberto em produção hoje, eles serão fechados — o que pode quebrar streaks que estão intactos apenas porque o fechamento nunca rodou. Ver a seção correspondente na PR.

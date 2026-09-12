@@ -35,6 +35,22 @@ export class ChallengesController {
     return this.challengesService.findById(id);
   }
 
+  // Separado de GET :id de propósito: o desafio é leitura pública, o código
+  // de convite não é — ver ChallengesService.findJoinCode.
+  @Get(':id/join-code')
+  findJoinCode(@CurrentUser() user: AuthenticatedUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.challengesService.findJoinCode(id, user.id);
+  }
+
+  // Sair do desafio: marca o vínculo como inativo, preserva todo o histórico
+  // (CLAUDE.md seção 2). Não confundir com DELETE :id, que destrói o desafio
+  // inteiro para todos.
+  @Post(':id/leave')
+  @HttpCode(HttpStatus.OK)
+  leave(@CurrentUser() user: AuthenticatedUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.challengesService.leave(id, user.id);
+  }
+
   // Hard-delete total (ChallengesService.remove) — só o criador, cascateia
   // para todos os participantes. Não confundir com "sair do desafio"
   // (challenge_participants.status), que preserva tudo.

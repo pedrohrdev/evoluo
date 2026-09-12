@@ -49,3 +49,15 @@ export async function signIn(input: { email: string; password: string }) {
 export async function signOut() {
   await apiFetch<void>("/auth/logout", { method: "POST" });
 }
+
+// Passo 1 da recuperação de senha: dispara o e-mail. A API responde igual
+// exista ou não a conta — nunca confirme ao usuário que o e-mail "existe".
+export function forgotPassword(email: string) {
+  return apiFetch<void>("/auth/forgot-password", { method: "POST", body: { email }, auth: false });
+}
+
+// Passo 2: o link do e-mail devolve um token de recuperação no fragmento da
+// URL; ele vai junto com a senha nova.
+export function resetPassword(input: { accessToken: string; password: string }) {
+  return apiFetch<void>("/auth/reset-password", { method: "POST", body: input, auth: false });
+}

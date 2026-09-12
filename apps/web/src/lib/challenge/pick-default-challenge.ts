@@ -9,7 +9,12 @@ import type { ProfileChallengeParticipation } from "@/lib/api/types";
 export function pickDefaultChallenge(
   challenges: ProfileChallengeParticipation[],
 ): ProfileChallengeParticipation | undefined {
-  if (challenges.length === 0) return undefined;
+  // Desafios que a pessoa deixou nunca são o destino padrão: sem isto, quem
+  // saiu do único desafio ficava preso sendo redirecionado de volta para um
+  // painel em que não pode registrar nada.
+  const active = challenges.filter((c) => c.status === "active");
+  if (active.length === 0) return undefined;
+  challenges = active;
 
   const withCheckIn = challenges.filter((c): c is ProfileChallengeParticipation & { lastCheckInDate: string } =>
     Boolean(c.lastCheckInDate),

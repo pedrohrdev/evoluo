@@ -1,9 +1,12 @@
 "use client";
 
+import { useQuery } from "@tanstack/react-query";
 import { LogOut, Swords, User, Volume2, VolumeX } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { Avatar } from "@/components/profile/avatar";
 import { Dropdown, DropdownContent, DropdownItem, DropdownSeparator, DropdownTrigger } from "@/components/ui/dropdown";
+import { getProfile, profileQueryKey } from "@/lib/api/profiles";
 import { useAuth } from "@/lib/auth/auth-context";
 import { useSound } from "@/lib/sounds/sound-context";
 
@@ -12,18 +15,35 @@ export function UserMenu() {
   const { enabled, setEnabled } = useSound();
   const router = useRouter();
 
+  // Mesma chave de cache do perfil usada no resto do app — normalmente já
+  // está quente quando o menu renderiza, então não custa uma requisição.
+  const { data: profile } = useQuery({
+    queryKey: profileQueryKey(session?.userId ?? ""),
+    queryFn: () => getProfile(session!.userId),
+    enabled: !!session,
+    staleTime: 5 * 60_000,
+  });
+
   if (!session) return null;
 
-  const initial = (session.email ?? "?").charAt(0).toUpperCase();
+  // Antes mostrava a inicial do E-MAIL: quem se chamava "Gustavo" com um
+  // e-mail "pedro@..." via um "P" no próprio menu, e a foto de perfil que
+  // tinha acabado de subir não aparecia em lugar nenhum do app.
+  const displayName = profile?.displayName ?? session.email ?? "?";
 
   return (
     <Dropdown>
       <DropdownTrigger asChild>
         <button
-          className="flex size-9 items-center justify-center rounded-full bg-surface-3 font-display text-sm font-semibold text-ink transition-colors hover:bg-surface-2"
+          className="rounded-full transition-opacity hover:opacity-80"
           aria-label="Menu do usuário"
         >
-          {initial}
+          <Avatar
+            displayName={displayName}
+            avatarUrl={profile?.avatarUrl}
+            className="size-9"
+            textClassName="text-sm"
+          />
         </button>
       </DropdownTrigger>
       <DropdownContent>

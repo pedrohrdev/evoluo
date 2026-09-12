@@ -34,7 +34,12 @@ export class RecordsService {
   async checkInDaily(participantId: string, userId: string, dto: CheckInDailyDto) {
     const participant = await this.prisma.challengeParticipant.findUnique({
       where: { id: participantId },
-      select: { id: true, userId: true, status: true, challenge: { select: { startDate: true } } },
+      select: {
+        id: true,
+        userId: true,
+        status: true,
+        challenge: { select: { startDate: true, endDate: true } },
+      },
     });
 
     if (!participant) {
@@ -46,7 +51,7 @@ export class RecordsService {
     if (participant.status !== ParticipantStatus.active) {
       throw new ForbiddenException('Não é possível fazer check-in de um desafio que você já deixou.');
     }
-    this.assertChallengeStarted(participant.challenge.startDate);
+    this.assertChallengeWindow(participant.challenge);
 
     const today = new Date(todayInSaoPaulo());
 
@@ -170,10 +175,6 @@ export class RecordsService {
     // todayInSaoPaulo, que aplicaria um fuso e deslocaria o dia.
     const periodEndStr = toDateString(goal.challengeParticipant.challenge.endDate);
 
-    if (todayInSaoPaulo() > periodEndStr) {
-      throw new ForbiddenException('Não é possível registrar a meta de duração depois que o desafio termina.');
-    }
-
     const start = new Date(periodStartStr);
 
     return this.prisma.challengeRecord.upsert({
@@ -244,7 +245,7 @@ export class RecordsService {
       throw new ForbiddenException('Não é possível registrar metas de um desafio que você já deixou.');
     }
 
-    this.assertChallengeStarted(goal.challengeParticipant.challenge.startDate);
+    this.assertChallengeWindow(goal.challengeParticipant.challenge);
 
     const currentVersion = goal.versions[0];
     if (!currentVersion) {
@@ -346,15 +347,32 @@ export class RecordsService {
     }));
   }
 
-  // Um desafio pode ser programado pra começar numa data futura (ex.: criar
-  // na sexta, combinar de todo mundo começar na segunda) — nada registrável
-  // deve valer antes disso: sem check-in, sem streak, sem pontos. A janela
-  // "hoje" dos triggers do banco (enforce_daily_record_window etc.) não
-  // sabe disso — só compara record_date contra a data atual, nunca contra
-  // challenges.start_date — então essa checagem só existe aqui.
-  private assertChallengeStarted(startDate: Date): void {
-    if (todayInSaoPaulo() < toDateString(startDate)) {
+  // A janela em que um desafio aceita escrita: de start_date a end_date,
+  // inclusive, no fuso fixo America/Sao_Paulo.
+  //
+  // Os triggers do banco (enforce_daily_record_window,
+  // enforce_period_record_window) só comparam a data do registro contra
+  // "hoje" — não conhecem challenges.start_date nem end_date. Por isso as
+  // duas pontas são checadas aqui.
+  //
+  // Início: um desafio pode ser criado para começar numa data futura (ex.:
+  // criar na sexta, combinar de todo mundo começar na segunda) — antes
+  // disso nada é registrável (CLAUDE.md seção 2).
+  //
+  // Fim: a duração é fixa (30/50/100/365 dias, CLAUDE.md seção 1), então o
+  // desafio para de aceitar registro depois do último dia. Sem isto, o
+  // check-in continuava creditando pontos e subindo streak indefinidamente
+  // — enquanto close_daily_period (que filtra por `p_date <= c.end_date`)
+  // já tinha parado de fechar os dias, deixando as duas regras divergindo.
+  private assertChallengeWindow(challenge: { startDate: Date; endDate: Date }): void {
+    const today = todayInSaoPaulo();
+
+    if (today < toDateString(challenge.startDate)) {
       throw new ForbiddenException('Este desafio ainda não começou.');
+    }
+
+    if (today > toDateString(challenge.endDate)) {
+      throw new ForbiddenException('Este desafio já terminou.');
     }
   }
 

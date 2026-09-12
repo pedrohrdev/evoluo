@@ -138,6 +138,9 @@ Perfis são **públicos** para qualquer usuário autenticado no aplicativo, mesm
 - Sair de um desafio marca o vínculo como inativo (não apaga nada): some do ranking ativo, não pode mais registrar, mas histórico, pontos e streaks permanecem intactos e consultáveis no perfil.
 - O fechamento de dia/período usa um fuso horário fixo do servidor (`America/Sao_Paulo`) para todos os participantes, independente do fuso de cada um.
 - Um desafio pode ser criado com `start_date` no futuro (ex.: combinar com os amigos de começar todo mundo junto numa segunda-feira específica). Antes dessa data, ninguém pode registrar nem fazer check-in de nenhuma meta (diária, semanal, mensal ou de duração) — mas já dá pra entrar no desafio e configurar as próprias metas com antecedência.
+- Simetricamente, **depois do `end_date` nada mais é registrável**: a duração é fixa, então o desafio para de aceitar check-in e registro de meta (diária, semanal, mensal ou de duração) a partir do dia seguinte ao último. Histórico, pontos, streaks e ranking continuam consultáveis normalmente. Aplicado em `RecordsService.assertChallengeWindow` e em `check_in_daily_period()` (etapa 23).
+- **Sair do desafio** (regra já descrita acima) é `POST /challenges/:id/leave`, disponível a qualquer participante, inclusive ao criador — `created_by` não muda ao sair, então ele continua sendo o único que pode deletar o desafio. Deletar é uma operação diferente e destrutiva (`DELETE /challenges/:id`).
+- O **código de convite não é público**: `GET /challenges/:id` (leitura aberta a qualquer autenticado) não o devolve. Quem participa lê em `GET /challenges/:id/join-code`. O id do desafio aparece no perfil público de qualquer participante, então expor o código junto com ele anularia o próprio controle de acesso de entrada.
 
 ### Metas especiais entre participantes
 

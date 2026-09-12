@@ -1,5 +1,5 @@
 import { apiFetch } from "./client";
-import type { Challenge } from "./types";
+import type { Challenge, ChallengeJoinCode } from "./types";
 
 export function createChallenge(input: {
   name: string;
@@ -19,6 +19,18 @@ export function joinChallenge(joinCode: string) {
 
 export function getChallenge(id: string) {
   return apiFetch<Challenge>(`/challenges/${id}`);
+}
+
+// Separado de getChallenge porque o código de convite não é público — só
+// quem já participa do desafio consegue lê-lo (ChallengesService.findJoinCode).
+export function getJoinCode(challengeId: string) {
+  return apiFetch<ChallengeJoinCode>(`/challenges/${challengeId}/join-code`);
+}
+
+// Sair do desafio: marca o vínculo como inativo, preserva histórico, pontos
+// e streaks (CLAUDE.md seção 2). Não confunda com deleteChallenge.
+export function leaveChallenge(id: string) {
+  return apiFetch<{ id: string; status: "inactive" }>(`/challenges/${id}/leave`, { method: "POST" });
 }
 
 // Hard-delete total (só o criador) — apaga o desafio e cascateia para

@@ -3,7 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Check, Copy } from "lucide-react";
 import { useState } from "react";
-import { getChallenge } from "@/lib/api/challenges";
+import { getJoinCode } from "@/lib/api/challenges";
 import { useToast } from "@/lib/toast/toast-context";
 
 // O código de entrada nunca aparecia em lugar nenhum da interface depois
@@ -14,22 +14,25 @@ export function JoinCodeBadge({ challengeId }: { challengeId: string }) {
   const { notify } = useToast();
   const [copied, setCopied] = useState(false);
 
-  const { data: challenge } = useQuery({
-    queryKey: ["challenge", challengeId],
-    queryFn: () => getChallenge(challengeId),
+  // Rota própria (etapa 23): o código de convite deixou de vir junto com o
+  // desafio, porque o desafio é leitura pública e o código é o único
+  // controle de acesso de entrada. Só quem participa consegue lê-lo.
+  const { data } = useQuery({
+    queryKey: ["challenge-join-code", challengeId],
+    queryFn: () => getJoinCode(challengeId),
     staleTime: 5 * 60_000,
   });
 
-  if (!challenge) return null;
+  if (!data) return null;
 
   async function handleCopy() {
     try {
-      await navigator.clipboard.writeText(challenge!.joinCode);
+      await navigator.clipboard.writeText(data!.joinCode);
       setCopied(true);
       notify("Código copiado!", "success");
       window.setTimeout(() => setCopied(false), 2000);
     } catch {
-      notify("Não foi possível copiar. Copie manualmente: " + challenge!.joinCode, "info");
+      notify("Não foi possível copiar. Copie manualmente: " + data!.joinCode, "info");
     }
   }
 
@@ -39,7 +42,7 @@ export function JoinCodeBadge({ challengeId }: { challengeId: string }) {
       className="flex items-center gap-1.5 rounded-sm border border-line bg-surface-2 px-2.5 py-1.5 font-display text-xs font-semibold tracking-[0.2em] text-ink-muted transition-colors hover:border-line-strong hover:text-ink"
       title="Copiar código de convite"
     >
-      {challenge.joinCode}
+      {data.joinCode}
       {copied ? <Check className="size-3.5 text-success" aria-hidden /> : <Copy className="size-3.5" aria-hidden />}
     </button>
   );

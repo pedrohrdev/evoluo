@@ -1,6 +1,6 @@
 "use client";
 
-import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Gift, Plus } from "lucide-react";
 import { useState } from "react";
 import { CreateSpecialGoalModal } from "@/components/special-goals/create-special-goal-modal";
@@ -10,7 +10,6 @@ import { Button } from "@/components/ui/button";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/feedback";
 import { Surface } from "@/components/ui/surface";
 import { ApiError } from "@/lib/api/client";
-import { getProfile, profileQueryKey } from "@/lib/api/profiles";
 import { getRanking } from "@/lib/api/ranking";
 import { cancelSpecialGoal, completeSpecialGoal, listSpecialGoals } from "@/lib/api/special-goals";
 import { useChallenge } from "@/lib/challenge/challenge-context";
@@ -38,17 +37,12 @@ export default function SpecialGoalsPage() {
   });
 
   const participants = rankingQuery.data ?? [];
-  const profileQueries = useQueries({
-    queries: participants.map((entry) => ({
-      queryKey: profileQueryKey(entry.userId),
-      queryFn: () => getProfile(entry.userId),
-      staleTime: 5 * 60_000,
-    })),
-  });
 
+  // O ranking já traz displayName desde a etapa 23 — antes esta tela
+  // disparava um GET /profiles/:id por participante só para resolver nomes.
   const nameByParticipantId = new Map<string, string>();
-  participants.forEach((entry, index) => {
-    nameByParticipantId.set(entry.participantId, profileQueries[index]?.data?.displayName ?? "…");
+  participants.forEach((entry) => {
+    nameByParticipantId.set(entry.participantId, entry.displayName ?? "Participante");
   });
 
   function invalidate() {
@@ -120,8 +114,8 @@ export default function SpecialGoalsPage() {
                 <SpecialGoalRow
                   key={goal.id}
                   goal={goal}
-                  fromName={nameByParticipantId.get(goal.fromParticipantId) ?? "…"}
-                  toName={nameByParticipantId.get(goal.toParticipantId) ?? "…"}
+                  fromName={nameByParticipantId.get(goal.fromParticipantId) ?? "Participante"}
+                  toName={nameByParticipantId.get(goal.toParticipantId) ?? "Participante"}
                   canComplete={goal.status === "pending" && goal.toParticipantId === participantId}
                   canCancel={goal.status === "pending" && goal.fromParticipantId === participantId}
                   onComplete={() => completeMutation.mutate(goal.id)}
