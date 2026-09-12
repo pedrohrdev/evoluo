@@ -1,4 +1,5 @@
 import { BadRequestException, ConflictException, UnauthorizedException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { SupabaseService } from '../supabase/supabase.service';
 import { AuthService } from './auth.service';
 
@@ -7,7 +8,11 @@ describe('AuthService', () => {
   let signInWithPassword: jest.Mock;
   let refreshSession: jest.Mock;
   let adminSignOut: jest.Mock;
+  let resetPasswordForEmail: jest.Mock;
+  let getUser: jest.Mock;
+  let updateUserById: jest.Mock;
   let supabaseService: SupabaseService;
+  let configService: ConfigService;
   let service: AuthService;
 
   beforeEach(() => {
@@ -15,17 +20,21 @@ describe('AuthService', () => {
     signInWithPassword = jest.fn();
     refreshSession = jest.fn();
     adminSignOut = jest.fn();
+    resetPasswordForEmail = jest.fn().mockResolvedValue({ data: {}, error: null });
+    getUser = jest.fn();
+    updateUserById = jest.fn().mockResolvedValue({ data: {}, error: null });
 
     supabaseService = {
       client: {
-        auth: { signUp, signInWithPassword, refreshSession },
+        auth: { signUp, signInWithPassword, refreshSession, resetPasswordForEmail, getUser },
       },
       adminClient: {
-        auth: { admin: { signOut: adminSignOut } },
+        auth: { admin: { signOut: adminSignOut, updateUserById } },
       },
     } as unknown as SupabaseService;
 
-    service = new AuthService(supabaseService);
+    configService = { get: jest.fn().mockReturnValue(undefined) } as unknown as ConfigService;
+    service = new AuthService(supabaseService, configService);
   });
 
   describe('signUp', () => {
@@ -116,6 +125,64 @@ describe('AuthService', () => {
       adminSignOut.mockResolvedValue({ error: { message: 'boom' } });
 
       await expect(service.signOut('access-token')).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('forgotPassword', () => {
+    it('passes the configured redirect URL to Supabase', async () => {
+      (configService.get as jest.Mock).mockReturnValue('https://evoluo.app/reset-password');
+
+      await service.forgotPassword({ email: 'a@b.com' });
+
+      expect(resetPasswordForEmail).toHaveBeenCalledWith('a@b.com', {
+        redirectTo: 'https://evoluo.app/reset-password',
+      });
+    });
+
+    it('omits redirectTo when the env var is not set, letting Supabase use its Site URL', async () => {
+      (configService.get as jest.Mock).mockReturnValue(undefined);
+
+      await service.forgotPassword({ email: 'a@b.com' });
+
+      expect(resetPasswordForEmail).toHaveBeenCalledWith('a@b.com', {});
+    });
+
+    // Não pode virar um oráculo de "quais e-mails têm conta no Evoluo": a
+    // resposta é a mesma exista ou não a conta, inclusive quando o Supabase
+    // devolve erro.
+    it('resolves silently when Supabase reports an error', async () => {
+      resetPasswordForEmail.mockResolvedValue({ data: null, error: { message: 'user not found' } });
+
+      await expect(service.forgotPassword({ email: 'ninguem@b.com' })).resolves.toBeUndefined();
+    });
+  });
+
+  describe('resetPassword', () => {
+    it('updates the password after validating the recovery token', async () => {
+      getUser.mockResolvedValue({ data: { user: { id: 'u1' } }, error: null });
+
+      await service.resetPassword({ accessToken: 'recovery-token', password: 'novasenha123' });
+
+      expect(getUser).toHaveBeenCalledWith('recovery-token');
+      expect(updateUserById).toHaveBeenCalledWith('u1', { password: 'novasenha123' });
+    });
+
+    it('throws UnauthorizedException when the recovery token is invalid or expired', async () => {
+      getUser.mockResolvedValue({ data: { user: null }, error: { message: 'invalid' } });
+
+      await expect(
+        service.resetPassword({ accessToken: 'expirado', password: 'novasenha123' }),
+      ).rejects.toThrow(UnauthorizedException);
+      expect(updateUserById).not.toHaveBeenCalled();
+    });
+
+    it('throws BadRequestException when Supabase refuses the new password', async () => {
+      getUser.mockResolvedValue({ data: { user: { id: 'u1' } }, error: null });
+      updateUserById.mockResolvedValue({ data: null, error: { message: 'senha fraca' } });
+
+      await expect(
+        service.resetPassword({ accessToken: 'recovery-token', password: 'novasenha123' }),
+      ).rejects.toThrow(BadRequestException);
     });
   });
 });

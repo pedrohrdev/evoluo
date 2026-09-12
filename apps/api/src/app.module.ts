@@ -1,10 +1,11 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
-import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { AuthModule } from './auth/auth.module';
 import { ChallengesModule } from './challenges/challenges.module';
+import { UserThrottlerGuard } from './common/throttler/user-throttler.guard';
 import { validateEnv } from './config/env.validation';
 import { GoalsModule } from './goals/goals.module';
 import { PointsModule } from './points/points.module';
@@ -25,6 +26,8 @@ import { SupabaseModule } from './supabase/supabase.module';
     // Limite padrão global (etapa 19 "Segurança e regras anti-exploit") —
     // rotas sensíveis (join por código, login, signup) definem um limite
     // mais restrito por cima deste via @Throttle() no próprio controller.
+    // O limite é POR USUÁRIO (ou por IP nas rotas anônimas), nunca global —
+    // ver UserThrottlerGuard e o `trust proxy` em main.ts.
     ThrottlerModule.forRoot([{ name: 'default', ttl: 60_000, limit: 60 }]),
     PrismaModule,
     SupabaseModule,
@@ -39,6 +42,6 @@ import { SupabaseModule } from './supabase/supabase.module';
     AnalyticsModule,
     SpecialGoalsModule,
   ],
-  providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
+  providers: [{ provide: APP_GUARD, useClass: UserThrottlerGuard }],
 })
 export class AppModule {}

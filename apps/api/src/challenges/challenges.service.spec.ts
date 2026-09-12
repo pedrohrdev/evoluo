@@ -1,5 +1,5 @@
 import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { ParticipantStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ChallengesService } from './challenges.service';
 
@@ -9,6 +9,7 @@ describe('ChallengesService', () => {
   let challengeDelete: jest.Mock;
   let participantCreate: jest.Mock;
   let participantFindUnique: jest.Mock;
+  let participantUpdate: jest.Mock;
   let executeRaw: jest.Mock;
   let transaction: jest.Mock;
   let prisma: PrismaService;
@@ -20,6 +21,7 @@ describe('ChallengesService', () => {
     challengeDelete = jest.fn();
     participantCreate = jest.fn();
     participantFindUnique = jest.fn();
+    participantUpdate = jest.fn();
     executeRaw = jest.fn().mockResolvedValue(undefined);
 
     // $transaction aqui só encaminha o callback para um "tx" que reusa os
@@ -35,7 +37,11 @@ describe('ChallengesService', () => {
 
     prisma = {
       challenge: { create: challengeCreate, findUnique: challengeFindUnique, delete: challengeDelete },
-      challengeParticipant: { create: participantCreate, findUnique: participantFindUnique },
+      challengeParticipant: {
+        create: participantCreate,
+        findUnique: participantFindUnique,
+        update: participantUpdate,
+      },
       $transaction: transaction,
     } as unknown as PrismaService;
 
@@ -77,7 +83,22 @@ describe('ChallengesService', () => {
       challengeFindUnique.mockResolvedValue(challenge);
 
       await expect(service.findById('c1')).resolves.toEqual(challenge);
-      expect(challengeFindUnique).toHaveBeenCalledWith({ where: { id: 'c1' } });
+      // join_code NUNCA sai daqui: é o único controle de acesso de entrada
+      // no desafio, e o id do desafio é público (aparece no perfil de
+      // qualquer participante). Ver ChallengesService.findJoinCode.
+      expect(challengeFindUnique).toHaveBeenCalledWith({
+        where: { id: 'c1' },
+        select: {
+          id: true,
+          name: true,
+          description: true,
+          durationDays: true,
+          startDate: true,
+          endDate: true,
+          createdBy: true,
+          createdAt: true,
+        },
+      });
     });
 
     it('throws NotFoundException when missing', async () => {
@@ -169,6 +190,64 @@ describe('ChallengesService', () => {
       await expect(service.remove('c1', 'u1')).rejects.toThrow(ForbiddenException);
       expect(transaction).not.toHaveBeenCalled();
       expect(challengeDelete).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('findJoinCode', () => {
+    it('returns the code for a participant of the challenge', async () => {
+      challengeFindUnique.mockResolvedValue({ id: 'c1', joinCode: 'ABCD2345' });
+      participantFindUnique.mockResolvedValue({ id: 'p1' });
+
+      await expect(service.findJoinCode('c1', 'u1')).resolves.toEqual({
+        challengeId: 'c1',
+        joinCode: 'ABCD2345',
+      });
+    });
+
+    // O id do desafio é público (aparece no perfil de qualquer participante),
+    // então esta rota é o que impede alguém de ler os desafios de outra
+    // pessoa pelo perfil e entrar em todos eles.
+    it('throws ForbiddenException for someone who does not participate', async () => {
+      challengeFindUnique.mockResolvedValue({ id: 'c1', joinCode: 'ABCD2345' });
+      participantFindUnique.mockResolvedValue(null);
+
+      await expect(service.findJoinCode('c1', 'u9')).rejects.toThrow(ForbiddenException);
+    });
+
+    it('throws NotFoundException when the challenge does not exist', async () => {
+      challengeFindUnique.mockResolvedValue(null);
+
+      await expect(service.findJoinCode('c1', 'u1')).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('leave', () => {
+    // Regra do CLAUDE.md seção 2: sair marca o vínculo como inativo e NUNCA
+    // apaga nada — histórico, pontos e streaks continuam consultáveis.
+    it('deactivates the participation without deleting anything', async () => {
+      participantFindUnique.mockResolvedValue({ id: 'p1', status: ParticipantStatus.active });
+      participantUpdate.mockResolvedValue({ id: 'p1', status: ParticipantStatus.inactive });
+
+      await service.leave('c1', 'u1');
+
+      expect(participantUpdate).toHaveBeenCalledWith({
+        where: { id: 'p1' },
+        data: { status: ParticipantStatus.inactive },
+      });
+    });
+
+    it('throws NotFoundException when the user does not participate', async () => {
+      participantFindUnique.mockResolvedValue(null);
+
+      await expect(service.leave('c1', 'u1')).rejects.toThrow(NotFoundException);
+      expect(participantUpdate).not.toHaveBeenCalled();
+    });
+
+    it('throws ConflictException when the user already left', async () => {
+      participantFindUnique.mockResolvedValue({ id: 'p1', status: ParticipantStatus.inactive });
+
+      await expect(service.leave('c1', 'u1')).rejects.toThrow(ConflictException);
+      expect(participantUpdate).not.toHaveBeenCalled();
     });
   });
 });

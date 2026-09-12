@@ -44,13 +44,30 @@ export class RankingService {
       ],
     });
 
-    return participants.map((participant, index) => ({
-      position: index + 1,
-      participantId: participant.id,
-      userId: participant.userId,
-      currentStreak: participant.currentStreak,
-      totalPoints: participant.totalPoints,
-      totalDaysCompleted: participant.totalDaysCompleted,
-    }));
+    // Nome e foto vêm junto, numa única query a mais para o lote inteiro.
+    // Antes o ranking devolvia só o userId, e CADA linha do frontend
+    // (ranking-row, podium-card, metas especiais) buscava GET /profiles/:id
+    // — o endpoint mais caro da API, que carrega todas as participações e
+    // metas do usuário — só para desenhar uma inicial. Um painel de 10
+    // pessoas virava ~12 requisições, e o avatar buscado era jogado fora.
+    const profiles = await this.prisma.profile.findMany({
+      where: { id: { in: participants.map((participant) => participant.userId) } },
+      select: { id: true, displayName: true, avatarUrl: true },
+    });
+    const profileByUserId = new Map(profiles.map((profile) => [profile.id, profile]));
+
+    return participants.map((participant, index) => {
+      const profile = profileByUserId.get(participant.userId);
+      return {
+        position: index + 1,
+        participantId: participant.id,
+        userId: participant.userId,
+        displayName: profile?.displayName ?? null,
+        avatarUrl: profile?.avatarUrl ?? null,
+        currentStreak: participant.currentStreak,
+        totalPoints: participant.totalPoints,
+        totalDaysCompleted: participant.totalDaysCompleted,
+      };
+    });
   }
 }

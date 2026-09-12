@@ -1,5 +1,5 @@
 import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { ParticipantStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateChallengeDto } from './dto/create-challenge.dto';
 import { JoinChallengeDto } from './dto/join-challenge.dto';
@@ -34,14 +34,58 @@ export class ChallengesService {
     });
   }
 
+  // Leitura pública (qualquer autenticado), por extensão da decisão de que
+  // perfis são públicos — mas SEM o join_code. O código é o único controle
+  // de acesso de entrada no desafio (CLAUDE.md seção 2), e o id do desafio
+  // não é segredo: ele aparece no perfil público de qualquer participante
+  // (ProfilesService.getPublicProfile). Devolver o código aqui permitiria
+  // que qualquer usuário lesse os desafios de alguém pelo perfil e entrasse
+  // em todos eles. Quem já participa pega o código em findJoinCode().
   async findById(id: string) {
-    const challenge = await this.prisma.challenge.findUnique({ where: { id } });
+    const challenge = await this.prisma.challenge.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        durationDays: true,
+        startDate: true,
+        endDate: true,
+        createdBy: true,
+        createdAt: true,
+      },
+    });
 
     if (!challenge) {
       throw new NotFoundException('Desafio não encontrado.');
     }
 
     return challenge;
+  }
+
+  // O código de convite só para quem já está dentro do desafio — é o que
+  // permite convidar mais alguém dias depois de criar, sem transformar o
+  // código num dado público.
+  async findJoinCode(challengeId: string, userId: string) {
+    const challenge = await this.prisma.challenge.findUnique({
+      where: { id: challengeId },
+      select: { id: true, joinCode: true },
+    });
+
+    if (!challenge) {
+      throw new NotFoundException('Desafio não encontrado.');
+    }
+
+    const participant = await this.prisma.challengeParticipant.findUnique({
+      where: { challengeId_userId: { challengeId, userId } },
+      select: { id: true },
+    });
+
+    if (!participant) {
+      throw new ForbiddenException('Só quem participa do desafio pode ver o código de convite.');
+    }
+
+    return { challengeId: challenge.id, joinCode: challenge.joinCode };
   }
 
   // Basta ter o join_code para entrar — sem aprovação do criador (CLAUDE.md
@@ -75,6 +119,35 @@ export class ChallengesService {
       }
       throw error;
     }
+  }
+
+  // Sair do desafio (CLAUDE.md seção 2, "Outras regras já confirmadas"):
+  // marca o vínculo como inativo, NUNCA apaga nada. O participante some do
+  // ranking ativo e não pode mais registrar, mas histórico, pontos e streaks
+  // permanecem intactos e consultáveis no perfil. `left_at` é preenchido
+  // pelo trigger trg_set_left_at_on_deactivate, nunca aqui.
+  //
+  // Vale também para o criador: a regra não abre exceção para ele, e
+  // `created_by` não muda ao sair — ele continua sendo o único que pode
+  // deletar o desafio (operação diferente, ver remove()).
+  async leave(challengeId: string, userId: string) {
+    const participant = await this.prisma.challengeParticipant.findUnique({
+      where: { challengeId_userId: { challengeId, userId } },
+      select: { id: true, status: true },
+    });
+
+    if (!participant) {
+      throw new NotFoundException('Você não participa deste desafio.');
+    }
+
+    if (participant.status === ParticipantStatus.inactive) {
+      throw new ConflictException('Você já saiu deste desafio.');
+    }
+
+    return this.prisma.challengeParticipant.update({
+      where: { id: participant.id },
+      data: { status: ParticipantStatus.inactive },
+    });
   }
 
   // Hard-delete total, confirmado com o usuário: só o criador pode apagar,
