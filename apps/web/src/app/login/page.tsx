@@ -61,6 +61,12 @@ export default function LoginPage() {
               onChange={(e) => setPassword(e.target.value)}
             />
           </Field>
+          <Link
+            href="/forgot-password"
+            className="-mt-2 self-start text-sm text-ink-muted hover:text-ink hover:underline"
+          >
+            Esqueci minha senha
+          </Link>
           {error ? (
             <p className="text-sm text-danger" role="alert">
               {error}

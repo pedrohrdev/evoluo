@@ -1,28 +1,35 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Settings, Trash2 } from "lucide-react";
+import { DoorOpen, Settings, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Dropdown, DropdownContent, DropdownItem, DropdownTrigger } from "@/components/ui/dropdown";
+import { Dropdown, DropdownContent, DropdownItem, DropdownSeparator, DropdownTrigger } from "@/components/ui/dropdown";
 import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
-import { deleteChallenge, getChallenge } from "@/lib/api/challenges";
+import { deleteChallenge, getChallenge, leaveChallenge } from "@/lib/api/challenges";
 import { profileQueryKey } from "@/lib/api/profiles";
 import { useAuth } from "@/lib/auth/auth-context";
 import { useToast } from "@/lib/toast/toast-context";
 
-// Só o criador do desafio vê este menu — hard-delete total, confirmado com
-// o usuário: apaga o desafio inteiro (histórico, pontos e streaks de TODOS
-// os participantes, não só do criador), sem volta. Por isso exige digitar
-// o nome do desafio antes de habilitar o botão, em vez de um único clique.
+// Duas ações bem diferentes, deliberadamente separadas na interface:
+//
+//   Sair do desafio — qualquer participante. Marca o vínculo como inativo:
+//   some do ranking ativo e não dá mais para registrar, mas histórico,
+//   pontos e streaks continuam intactos no perfil (CLAUDE.md seção 2).
+//   Reversível pelo lado do produto (dá para entrar de novo com o código).
+//
+//   Deletar o desafio — só o criador. Hard-delete total: apaga histórico,
+//   pontos e streaks de TODOS os participantes, sem volta. Por isso exige
+//   digitar o nome do desafio, em vez de um único clique.
 export function ChallengeSettingsMenu({ challengeId }: { challengeId: string }) {
   const { session } = useAuth();
   const router = useRouter();
   const queryClient = useQueryClient();
   const { notify } = useToast();
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [leaveOpen, setLeaveOpen] = useState(false);
   const [confirmText, setConfirmText] = useState("");
 
   // Mesma queryKey de JoinCodeBadge — reaproveita o cache, não duplica a
@@ -31,6 +38,16 @@ export function ChallengeSettingsMenu({ challengeId }: { challengeId: string }) 
     queryKey: ["challenge", challengeId],
     queryFn: () => getChallenge(challengeId),
     staleTime: 5 * 60_000,
+  });
+
+  const leaveMutation = useMutation({
+    mutationFn: () => leaveChallenge(challengeId),
+    onSuccess: () => {
+      notify("Você saiu do desafio. Seu histórico continua no seu perfil.", "success");
+      if (session) void queryClient.invalidateQueries({ queryKey: profileQueryKey(session.userId) });
+      router.replace("/onboarding?all=1");
+    },
+    onError: () => notify("Não foi possível sair do desafio. Tente de novo.", "danger"),
   });
 
   const deleteMutation = useMutation({
@@ -43,10 +60,11 @@ export function ChallengeSettingsMenu({ challengeId }: { challengeId: string }) 
     onError: () => notify("Não foi possível deletar o desafio.", "danger"),
   });
 
-  if (!challenge || !session || challenge.createdBy !== session.userId) {
+  if (!challenge || !session) {
     return null;
   }
 
+  const isOwner = challenge.createdBy === session.userId;
   const canConfirm = confirmText.trim() === challenge.name;
 
   return (
@@ -62,17 +80,52 @@ export function ChallengeSettingsMenu({ challengeId }: { challengeId: string }) 
         </DropdownTrigger>
         <DropdownContent>
           <DropdownItem
-            className="text-danger data-[highlighted]:bg-danger-soft"
             onSelect={(event) => {
               event.preventDefault();
-              setConfirmOpen(true);
+              setLeaveOpen(true);
             }}
           >
-            <Trash2 className="size-4" aria-hidden />
-            Deletar desafio
+            <DoorOpen className="size-4" aria-hidden />
+            Sair do desafio
           </DropdownItem>
+          {isOwner ? (
+            <>
+              <DropdownSeparator />
+              <DropdownItem
+                className="text-danger data-[highlighted]:bg-danger-soft"
+                onSelect={(event) => {
+                  event.preventDefault();
+                  setConfirmOpen(true);
+                }}
+              >
+                <Trash2 className="size-4" aria-hidden />
+                Deletar desafio
+              </DropdownItem>
+            </>
+          ) : null}
         </DropdownContent>
       </Dropdown>
+
+      <Modal
+        open={leaveOpen}
+        onOpenChange={setLeaveOpen}
+        title="Sair do desafio"
+        description="Você sai do ranking e para de registrar metas a partir de agora. Seu histórico, seus pontos e seus streaks continuam no seu perfil — nada é apagado."
+      >
+        <div className="flex flex-col gap-4">
+          <p className="text-sm text-ink-muted">
+            Para voltar depois, é só entrar de novo com o código do desafio.
+          </p>
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button variant="secondary" onClick={() => setLeaveOpen(false)}>
+              Continuar no desafio
+            </Button>
+            <Button variant="danger" loading={leaveMutation.isPending} onClick={() => leaveMutation.mutate()}>
+              Sair do desafio
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       <Modal
         open={confirmOpen}

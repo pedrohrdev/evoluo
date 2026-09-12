@@ -4,15 +4,21 @@ import { ArrowLeft, Ban } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { use } from "react";
+import { Avatar } from "@/components/profile/avatar";
 import { EmptyState, LoadingState } from "@/components/ui/feedback";
 import { useRequireAuth } from "@/lib/auth/use-require-auth";
 import { cn } from "@/lib/cn";
 import { ProfileParticipationProvider, useProfileParticipation } from "@/lib/profile/profile-participation-context";
 
-const TABS = [
+// "Perfil" sai do escopo do desafio (é `/profiles/:id`, não
+// `/profiles/:id/challenges/:challengeId/...`), por isso o `absolute`. Sem
+// ela, o perfil de outra pessoa não tinha nenhuma entrada na interface:
+// o redirect que trazia a pessoa até aqui engolia a página de perfil.
+const TABS: { href: string; label: string; absolute?: boolean }[] = [
   { href: "", label: "Painel" },
   { href: "/history", label: "Histórico" },
   { href: "/analytics", label: "Análises" },
+  { href: "/profiles/:id", label: "Perfil", absolute: true },
 ];
 
 // Contraparte somente-leitura de app/c/[challengeId]/layout.tsx: ali o
@@ -78,8 +84,20 @@ function ParticipationGate({
         {profile.displayName}
       </button>
 
-      <h1 className="mb-1 font-display text-xl font-semibold text-ink">Metas de {profile.displayName}</h1>
-      <p className="mb-4 text-sm text-ink-muted">{participation.challengeName}</p>
+      <div className="mb-4 flex items-center gap-3">
+        <Link href={`/profiles/${profileId}`} className="shrink-0 rounded-full transition-opacity hover:opacity-80">
+          <Avatar
+            displayName={profile.displayName}
+            avatarUrl={profile.avatarUrl}
+            className="size-11"
+            textClassName="text-base"
+          />
+        </Link>
+        <div className="min-w-0">
+          <h1 className="truncate font-display text-xl font-semibold text-ink">{profile.displayName}</h1>
+          <p className="truncate text-sm text-ink-muted">{participation.challengeName}</p>
+        </div>
+      </div>
 
       {/* Trocar de desafio sem passar pela lista do perfil (pedido do
           usuário): só aparece quando a pessoa participa de mais de um. Link
@@ -108,7 +126,7 @@ function ParticipationGate({
 
       <div className="mb-6 flex items-center gap-1 border-b border-line">
         {TABS.map((tab) => {
-          const href = `${base}${tab.href}`;
+          const href = tab.absolute ? tab.href.replace(":id", profileId) : `${base}${tab.href}`;
           const active = pathname === href;
           return (
             <Link
