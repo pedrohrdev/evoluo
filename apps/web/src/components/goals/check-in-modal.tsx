@@ -1,17 +1,17 @@
 "use client";
 
+import { AlertTriangle } from "lucide-react";
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { Surface } from "@/components/ui/surface";
 import { ApiError } from "@/lib/api/client";
-import { RECORD_FN } from "@/lib/api/record-router";
 import { checkInDaily } from "@/lib/api/records";
-import type { Goal, GoalPeriod, RecordEntry, TodayState } from "@/lib/api/types";
+import type { Goal, RecordEntry, TodayState } from "@/lib/api/types";
 import { cn } from "@/lib/cn";
-import { GOAL_PERIOD_LABEL, IMPORTANCE_LABEL } from "@/lib/domain/labels";
-import { formatValueForKind } from "@/lib/format/format";
+import { IMPORTANCE_LABEL } from "@/lib/domain/labels";
+import { formatValueForKind, pluralize } from "@/lib/format/format";
 import { useSound } from "@/lib/sounds/sound-context";
 import { useToast } from "@/lib/toast/toast-context";
 
@@ -24,23 +24,37 @@ function draftFor(goal: Goal, record: RecordEntry | undefined): Draft {
   return { kind: "number", value: record?.actualValue?.toString() ?? "" };
 }
 
-// Corpo do formulário: só é montado enquanto o modal está aberto (ver
-// CheckInModal abaixo), então o estado inicial de `drafts` já nasce
-// preenchido com o que existir hoje — reabrir o check-in mais tarde no
-// mesmo dia para corrigir um valor mostra o que já foi salvo, sem precisar
-// de um efeito para "resetar" o formulário a cada abertura.
+function isFilled(draft: Draft | undefined): boolean {
+  if (!draft) return false;
+  return draft.kind === "boolean" ? draft.value !== undefined : draft.value !== "";
+}
+
+// Prevê, no cliente, se o valor digitado cumpriria a meta — a mesma regra
+// que o trigger compute_daily_record_fields aplica no banco
+// (actual_value >= target_value, sem proporcionalidade). Serve só para
+// avisar o participante ANTES de enviar; quem decide de verdade continua
+// sendo o banco.
+function wouldComplete(goal: Goal, draft: Draft | undefined): boolean {
+  const version = goal.currentVersion;
+  if (!version || !isFilled(draft) || !draft) return false;
+  if (draft.kind === "boolean") return draft.value === true;
+  const target = version.targetValue;
+  if (target === null) return false;
+  return Number(draft.value) >= target;
+}
+
 function CheckInForm({
   participantId,
   goals,
   recordsByGoalId,
-  onRecorded,
+  currentStreak,
   onDailyCheckedIn,
   onOpenChange,
 }: {
   participantId: string;
   goals: Goal[];
   recordsByGoalId: Map<string, RecordEntry>;
-  onRecorded: (periodType: GoalPeriod, record: RecordEntry) => void;
+  currentStreak: number;
   onDailyCheckedIn: (today: TodayState) => void;
   onOpenChange: (open: boolean) => void;
 }) {
@@ -50,85 +64,112 @@ function CheckInForm({
     Object.fromEntries(goals.map((g) => [g.id, draftFor(g, recordsByGoalId.get(g.id))])),
   );
   const [pending, setPending] = useState(false);
+  // Segundo passo, só quando o envio vai de fato fechar o dia abaixo de 3/3.
+  const [confirming, setConfirming] = useState(false);
 
-  const hasAnyDraft = goals.some((g) => {
-    const d = drafts[g.id];
-    if (!d) return false;
-    return d.kind === "boolean" ? d.value !== undefined : d.value !== "";
-  });
+  const completedCount = goals.filter((goal) => wouldComplete(goal, drafts[goal.id])).length;
+  const dayWouldComplete = completedCount >= 3;
+  const breaksStreak = !dayWouldComplete && currentStreak > 0;
 
-  async function handleSubmit(event: React.FormEvent) {
-    event.preventDefault();
+  async function submit() {
     setPending(true);
     try {
       // Metas deixadas em branco simplesmente não são enviadas — continuam
       // sem registro (0/3 automático nas diárias, regra de negócio
       // existente), não é erro nem bloqueia o envio das demais.
-      const toSubmit = goals.filter((g) => {
-        const d = drafts[g.id];
-        if (!d) return false;
-        return d.kind === "boolean" ? d.value !== undefined : d.value !== "";
-      });
+      const payload = goals
+        .filter((goal) => isFilled(drafts[goal.id]))
+        .map((goal) => {
+          const draft = drafts[goal.id];
+          return {
+            goalId: goal.id,
+            ...(draft.kind === "boolean" ? { actualBoolean: draft.value } : { actualValue: Number(draft.value) }),
+          };
+        });
 
-      const dailyEntries = toSubmit.filter((g) => g.periodType === "daily");
-      const periodEntries = toSubmit.filter((g) => g.periodType !== "daily") as (Goal & {
-        periodType: Exclude<GoalPeriod, "daily">;
-      })[];
-
-      const dailyPayload = dailyEntries.map((goal) => {
-        const draft = drafts[goal.id];
-        return {
-          goalId: goal.id,
-          ...(draft.kind === "boolean" ? { actualBoolean: draft.value } : { actualValue: Number(draft.value) }),
-        };
-      });
-
-      // O check-in diário é sempre enviado (mesmo vazio) — é ele quem
-      // fecha o dia de hoje (streak/pontos), regra de negócio confirmada:
-      // só é possível fazer 1 check-in por dia, então abrir esta tela e
-      // concluir sempre conta como o check-in do dia, tenha ou não
-      // preenchido alguma diária.
-      const [today, periodResults] = await Promise.all([
-        checkInDaily(participantId, dailyPayload),
-        Promise.all(
-          periodEntries.map(async (goal) => {
-            const draft = drafts[goal.id];
-            const body =
-              draft.kind === "boolean" ? { actualBoolean: draft.value } : { actualValue: Number(draft.value) };
-            const record = await RECORD_FN[goal.periodType](goal.id, body);
-            return { periodType: goal.periodType, record };
-          }),
-        ),
-      ]);
+      const today = await checkInDaily(participantId, payload);
 
       onDailyCheckedIn(today);
-      periodResults.forEach(({ periodType, record }) => onRecorded(periodType, record));
-
-      const anyCompleted = today.daily.some((r) => r.completed) || periodResults.some(({ record }) => record.completed);
-      if (anyCompleted) play("goal-complete");
+      if (today.daily.some((record) => record.completed)) play("goal-complete");
       onOpenChange(false);
     } catch (err) {
       notify(err instanceof ApiError ? err.message : "Não foi possível concluir o check-in. Tente de novo.", "danger");
       play("error");
+      setConfirming(false);
     } finally {
       setPending(false);
     }
   }
 
+  function handleSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    // Fechar o dia abaixo de 3/3 zera o streak na hora e não tem volta —
+    // ver CLAUDE.md seção "Streak". Nada na tela comunicava isso antes:
+    // o botão era o mesmo com 3/3 e com 1/3.
+    if (!dayWouldComplete && !confirming) {
+      setConfirming(true);
+      return;
+    }
+    void submit();
+  }
+
+  if (confirming) {
+    return (
+      <div className="flex flex-col gap-4">
+        <Surface className="flex gap-3 border-danger/40 bg-danger-soft p-4">
+          <AlertTriangle className="mt-0.5 size-5 shrink-0 text-danger" aria-hidden />
+          <div className="text-sm">
+            <p className="font-medium text-ink">
+              Você vai fechar hoje com {completedCount} de 3 metas cumpridas.
+            </p>
+            <p className="mt-1 text-ink-muted">
+              {breaksStreak
+                ? `Isso zera seu streak de ${pluralize(currentStreak, "dia", "dias")} e não tem como desfazer. Você só faz check-in uma vez por dia.`
+                : "O dia só conta para o streak com as 3 metas cumpridas. Você só faz check-in uma vez por dia, então não dá para completar depois."}
+            </p>
+          </div>
+        </Surface>
+
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <Button variant="secondary" disabled={pending} onClick={() => setConfirming(false)}>
+            Voltar e preencher
+          </Button>
+          <Button variant="danger" loading={pending} onClick={() => void submit()}>
+            {breaksStreak ? "Enviar e perder o streak" : "Enviar assim mesmo"}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+      <p className="text-sm text-ink-muted">
+        <span className={cn("font-medium", dayWouldComplete ? "text-success" : "text-ink")}>
+          {completedCount} de 3
+        </span>{" "}
+        metas cumpridas com o que você preencheu.
+        {dayWouldComplete ? " O dia conta para o streak." : " São necessárias as 3 para o dia contar."}
+      </p>
+
       {goals.map((goal) => {
         const version = goal.currentVersion;
         if (!version) return null;
         const draft = drafts[goal.id];
-        const existing = recordsByGoalId.get(goal.id);
+        const filled = isFilled(draft);
+        const complete = wouldComplete(goal, draft);
 
         return (
-          <Surface key={goal.id} className="flex flex-col gap-2 p-3">
+          <Surface
+            key={goal.id}
+            className={cn("flex flex-col gap-2 p-3", filled && (complete ? "border-success/40" : "border-danger/40"))}
+          >
             <div className="flex flex-wrap items-center gap-1.5">
               <p className="min-w-0 flex-1 truncate text-sm font-medium text-ink">{version.title}</p>
-              <Badge tone="neutral">{GOAL_PERIOD_LABEL[goal.periodType]}</Badge>
               <Badge tone="neutral">{IMPORTANCE_LABEL[version.importance]}</Badge>
+              {filled ? (
+                <Badge tone={complete ? "success" : "danger"}>{complete ? "cumprida" : "abaixo do alvo"}</Badge>
+              ) : null}
             </div>
 
             {version.kind === "boolean" ? (
@@ -174,43 +215,38 @@ function CheckInForm({
                 aria-label={`Valor realizado para ${version.title}`}
               />
             )}
-
-            {existing ? (
-              <p className="text-xs text-ink-faint">
-                já registrado hoje:{" "}
-                {version.kind === "boolean"
-                  ? existing.actualBoolean
-                    ? "sim"
-                    : "não"
-                  : formatValueForKind(version.kind, existing.actualValue)}
-                {" · "}
-                {existing.pointsAwarded > 0 ? `+${existing.pointsAwarded} pts` : "0 pts"}
-              </p>
-            ) : null}
           </Surface>
         );
       })}
 
-      <Button type="submit" loading={pending} disabled={pending || !hasAnyDraft} className="mt-1">
-        Concluir check-in
+      <Button
+        type="submit"
+        variant={dayWouldComplete ? "primary" : "secondary"}
+        loading={pending}
+        disabled={pending}
+        className="mt-1"
+      >
+        {dayWouldComplete ? "Enviar e fechar o dia" : `Enviar com ${completedCount} de 3`}
       </Button>
     </form>
   );
 }
 
-// Único ponto de registro de metas: em vez de cada meta ter seu próprio
-// botão "Salvar" independente (permitindo registrar uma agora e outra
-// horas depois), o participante abre "Fazer check-in", preenche o que
-// quiser das metas diárias + opcionais ativas, e envia tudo de uma vez.
-// Só é possível 1 check-in por dia (CLAUDE.md seção "Streak") — depois de
-// enviado, o dashboard esconde este botão até o dia seguinte.
+// Check-in diário, e SÓ ele. Metas semanais/mensais/de duração têm o próprio
+// registro (PeriodGoalModal), porque são operações com consequências
+// diferentes: registrar a meta da semana não deveria — e antes disso
+// acontecia — fechar o dia e zerar o streak de quem só queria lançar as
+// horas da semana de manhã.
+//
+// Só é possível 1 check-in por dia (CLAUDE.md seção "Streak"): depois de
+// enviado, o painel esconde este botão até amanhã.
 export function CheckInModal({
   open,
   onOpenChange,
   participantId,
   goals,
   recordsByGoalId,
-  onRecorded,
+  currentStreak,
   onDailyCheckedIn,
 }: {
   open: boolean;
@@ -218,15 +254,15 @@ export function CheckInModal({
   participantId: string;
   goals: Goal[];
   recordsByGoalId: Map<string, RecordEntry>;
-  onRecorded: (periodType: GoalPeriod, record: RecordEntry) => void;
+  currentStreak: number;
   onDailyCheckedIn: (today: TodayState) => void;
 }) {
   return (
     <Modal
       open={open}
       onOpenChange={onOpenChange}
-      title="Fazer check-in"
-      description="Isso conta como seu único check-in de hoje — depois de enviar, não dá pra editar até amanhã."
+      title="Check-in de hoje"
+      description="Você só faz check-in uma vez por dia. O que enviar agora fecha o dia — e decide se seu streak continua."
       className="max-w-lg"
     >
       {open ? (
@@ -234,7 +270,7 @@ export function CheckInModal({
           participantId={participantId}
           goals={goals}
           recordsByGoalId={recordsByGoalId}
-          onRecorded={onRecorded}
+          currentStreak={currentStreak}
           onDailyCheckedIn={onDailyCheckedIn}
           onOpenChange={onOpenChange}
         />

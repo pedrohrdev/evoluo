@@ -17,7 +17,7 @@ import { getProfile, profileQueryKey } from "@/lib/api/profiles";
 import { useAuth } from "@/lib/auth/auth-context";
 import { useRequireAuth } from "@/lib/auth/use-require-auth";
 import { pickDefaultChallenge } from "@/lib/challenge/pick-default-challenge";
-import { formatDateLong } from "@/lib/format/format";
+import { formatDateLong, pluralize } from "@/lib/format/format";
 
 export default function ProfilePage() {
   const { id } = useParams<{ id: string }>();
@@ -115,7 +115,8 @@ export default function ProfilePage() {
                       ) : null}
                     </div>
                     <p className="mt-0.5 pl-6 text-xs text-ink-muted">
-                      {c.totalDaysCompleted} dia(s) concluído(s) · {c.goals.length} meta(s)
+                      {pluralize(c.totalDaysCompleted, "dia concluído", "dias concluídos")} ·{" "}
+                      {pluralize(c.goals.length, "meta", "metas")}
                     </p>
                   </div>
                   <StreakFlame value={c.currentStreak} size="sm" className="shrink-0" />

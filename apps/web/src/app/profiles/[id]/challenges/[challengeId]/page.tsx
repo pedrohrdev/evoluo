@@ -12,7 +12,7 @@ import { Surface } from "@/components/ui/surface";
 import { getRanking } from "@/lib/api/ranking";
 import { getTodayState } from "@/lib/api/records";
 import type { RecordEntry } from "@/lib/api/types";
-import { daysBetween } from "@/lib/format/format";
+import { daysBetween, todayInSaoPaulo } from "@/lib/format/format";
 import { useProfileParticipation } from "@/lib/profile/profile-participation-context";
 
 // Contraparte somente-leitura de app/c/[challengeId]/page.tsx: mostra as
@@ -52,7 +52,7 @@ export default function ProfileChallengeDashboardPage() {
 
   const dayNumber = Math.min(
     participation!.durationDays,
-    Math.max(1, daysBetween(participation!.startDate, new Date().toISOString()) + 1),
+    Math.max(1, daysBetween(participation!.startDate, todayInSaoPaulo()) + 1),
   );
 
   return (

@@ -15,7 +15,7 @@ import { getProfile, profileQueryKey } from "@/lib/api/profiles";
 import { useAuth } from "@/lib/auth/auth-context";
 import { useRequireAuth } from "@/lib/auth/use-require-auth";
 import { pickDefaultChallenge } from "@/lib/challenge/pick-default-challenge";
-import { daysBetween } from "@/lib/format/format";
+import { daysBetween, todayInSaoPaulo } from "@/lib/format/format";
 import { useSound } from "@/lib/sounds/sound-context";
 
 // useSearchParams() (pro escape hatch ?all=1) exige um Suspense boundary
@@ -111,7 +111,7 @@ function OnboardingContent() {
       {!isLoading && profile && profile.challenges.length > 0 ? (
         <ul className="flex flex-col gap-3">
           {profile.challenges.map((participation) => {
-            const dayNumber = Math.max(1, daysBetween(participation.startDate, new Date().toISOString()) + 1);
+            const dayNumber = Math.max(1, daysBetween(participation.startDate, todayInSaoPaulo()) + 1);
             return (
               <li key={participation.participantId}>
                 <Surface

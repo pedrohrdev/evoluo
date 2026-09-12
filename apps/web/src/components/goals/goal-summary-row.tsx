@@ -1,4 +1,4 @@
-import { Check, CircleDot } from "lucide-react";
+import { Check, CircleDot, Pencil } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Surface } from "@/components/ui/surface";
 import type { Goal, RecordEntry } from "@/lib/api/types";
@@ -13,10 +13,20 @@ function stateOf(record: RecordEntry | undefined): GoalState {
   return record.completed ? "completed" : "incomplete";
 }
 
-// Variante somente-leitura de GoalRecordCard, sem input/botão — usada para
-// exibir a meta de OUTRO participante (perfil público, CLAUDE.md seção 2
-// "Perfis"), onde não faz sentido permitir registrar nada.
-export function GoalSummaryRow({ goal, record }: { goal: Goal; record: RecordEntry | undefined }) {
+// Linha de meta em modo resumo. Sem `onRecord` é somente-leitura — usada
+// para exibir a meta de OUTRO participante (perfil público, CLAUDE.md seção
+// 2 "Perfis"). Com `onRecord`, ganha um botão de registrar: é assim que as
+// metas de período são lançadas desde que saíram de dentro do check-in
+// diário (ver period-goal-modal.tsx).
+export function GoalSummaryRow({
+  goal,
+  record,
+  onRecord,
+}: {
+  goal: Goal;
+  record: RecordEntry | undefined;
+  onRecord?: () => void;
+}) {
   const version = goal.currentVersion;
   if (!version) return null;
 
@@ -53,19 +63,32 @@ export function GoalSummaryRow({ goal, record }: { goal: Goal; record: RecordEnt
         </div>
       </div>
 
-      <div className="shrink-0 text-right text-xs text-ink-muted">
-        <p className="font-medium text-ink">
-          {!record
-            ? "Sem registro hoje"
-            : version.kind === "boolean"
-              ? record.actualBoolean
-                ? "Feito"
-                : "Não feito"
-              : record.completed
-                ? "Concluída"
-                : "Em aberto"}
-        </p>
-        {record ? <p>{record.pointsAwarded > 0 ? `+${record.pointsAwarded} pts` : "0 pts"}</p> : null}
+      <div className="flex shrink-0 items-center gap-2">
+        <div className="text-right text-xs text-ink-muted">
+          <p className="font-medium text-ink">
+            {!record
+              ? onRecord
+                ? "Sem registro"
+                : "Sem registro hoje"
+              : version.kind === "boolean"
+                ? record.actualBoolean
+                  ? "Feito"
+                  : "Não feito"
+                : record.completed
+                  ? "Concluída"
+                  : "Abaixo do alvo"}
+          </p>
+          {record ? <p>{record.pointsAwarded > 0 ? `+${record.pointsAwarded} pts` : "0 pts"}</p> : null}
+        </div>
+        {onRecord ? (
+          <button
+            onClick={onRecord}
+            className="rounded-sm p-2 text-ink-faint transition-colors hover:bg-surface-3 hover:text-ink"
+            aria-label={`Registrar ${version.title}`}
+          >
+            <Pencil className="size-4" aria-hidden />
+          </button>
+        ) : null}
       </div>
     </Surface>
   );
