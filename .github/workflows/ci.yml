@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    name: Build, lint e testes unitários
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      # O Prisma Client é gerado a partir do schema; sem isto o tsc não
+      # encontra os tipos do @prisma/client.
+      - run: npx prisma generate --schema apps/api/prisma/schema.prisma
+
+      - run: npm run api:build
+      - run: npm run api:test
+
+      - run: npm run web:typecheck
+      - run: npm run web:lint
+      - run: npm run web:build
+
+  integration:
+    name: Testes de integração (Postgres real)
+    runs-on: ubuntu-latest
+
+    # A razão de existir deste job: cumprimento de meta, pontuação, streak,
+    # janela de edição, imutabilidade do histórico e a recuperação do
+    # fechamento noturno são decididos por triggers e funções do Postgres.
+    # Os testes unitários mockam o PrismaService e não tocam em nenhuma
+    # dessas regras — só aqui elas são de fato exercitadas, rodando as
+    # migrations reais de supabase/migrations numa base descartável.
+    #
+    # Sem `services: postgres` de propósito: o harness sobe um Postgres
+    # embarcado (embedded-postgres) quando DATABASE_URL_TEST não está
+    # definida, o mesmo caminho que roda na máquina de quem desenvolve.
+    # Um só caminho, testado nos dois lugares.
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - run: npx prisma generate --schema apps/api/prisma/schema.prisma
+
+      - name: Rodar as migrations reais e exercitar o SQL
+        run: npm run api:test:int

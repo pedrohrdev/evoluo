@@ -15,6 +15,7 @@
     "web:dev": "npm run dev -w apps/web",
     "web:build": "npm run build -w apps/web",
     "web:lint": "npm run lint -w apps/web",
-    "web:typecheck": "npm run typecheck -w apps/web"
+    "web:typecheck": "npm run typecheck -w apps/web",
+    "api:test:int": "npm run test:int -w apps/api"
   }
 }

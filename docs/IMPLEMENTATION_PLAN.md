@@ -116,3 +116,18 @@ Uma etapa só é marcada como `[x]` depois de implementada, testada, integrada a
   **Lembrete diário**: `RemindersService` + `POST /reminders/daily`, protegida por segredo compartilhado (fechada por padrão). Envio plugável: sem `RESEND_API_KEY`/`REMINDER_FROM_EMAIL` o disparo vira no-op com log, para a rota poder ir a produção antes da credencial existir.
 
   187 testes passando (19 suítes).
+
+- [x] **27. Testes de integração contra Postgres real (Fase 5 da auditoria)**
+  Fecha a maior lacuna de qualidade apontada na auditoria: cumprimento de meta, pontuação, streak, janela de edição, imutabilidade do histórico e idempotência do fechamento são decididos por **triggers e funções do PostgreSQL**, não pelo NestJS — e os 200 testes unitários mockam o `PrismaService`, então nenhum deles tocava numa linha dessa lógica. A cobertura de 94% media a casca.
+
+  Harness em `apps/api/test/integration/`: `supabase-shim.sql` reproduz num Postgres puro o mínimo do ambiente Supabase de que as migrations dependem (roles `anon`/`authenticated`, schema `auth` com `users` e `auth.uid()`, schema `storage`, stub de `pg_cron`); `db.ts` aplica shim + todas as migrations de `supabase/migrations` em ordem numa base descartável e oferece helpers de seed; `global-setup.ts` sobe um **Postgres 18 embarcado** (`embedded-postgres`) quando `DATABASE_URL_TEST` não está definida.
+
+  Essa última decisão é o que torna a suíte utilizável: a limitação registrada desde a etapa 3 era "não é possível testar contra um Postgres real neste ambiente (sem Docker/Supabase CLI)". O `embedded-postgres` distribui o binário via npm, então o mesmo caminho roda na máquina de quem desenvolve e no CI, sem Docker. **A limitação de ambiente da etapa 20 deixa de valer.**
+
+  22 testes em 2 suítes, cobrindo: cumprimento a partir do alvo sem proporcionalidade, ausência de bônus por exceder (o exemplo literal do enunciado), escala de `points_config` por importância, impossibilidade de o cliente forjar `completed`/`points_awarded`, janela de edição, check-in 3/3 e 2/3, dupla chamada barrada, recusa antes do início e depois do fim do desafio, idempotência do fechamento noturno, o bug do fechamento antes de `start_date` (P1-5), recuperação de noites perdidas, imutabilidade de `goal_versions` mesmo como superusuário, snapshot preservado após edição da meta, teto de 3 metas diárias e a ordenação do ranking.
+
+  CI em `.github/workflows/ci.yml`: um job de build/lint/testes unitários e outro que roda as migrations reais e exercita o SQL.
+
+  Comando: `npm run api:test:int`.
+
+  **Itens da Fase 5 deliberadamente não feitos** (ver relatório final): verificação local do JWT no guard (P1-7) — mexe em autenticação de um app com usuários reais e não deve ser feita às pressas; paginação de histórico/ranking; recorte temporal em analytics.
