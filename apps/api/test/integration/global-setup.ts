@@ -1,3 +1,6 @@
+import { rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import EmbeddedPostgres from 'embedded-postgres';
 
 // Sobe um Postgres real e descartável para a suíte de integração.
@@ -14,8 +17,16 @@ export default async function globalSetup(): Promise<void> {
   }
 
   const port = 55_432;
+  const databaseDir = join(tmpdir(), 'evoluo-int-pg');
+
+  // `initialise()` recusa um diretório não vazio, então uma execução
+  // anterior deixaria a suíte quebrada da segunda vez em diante (e o CI,
+  // que sempre parte de uma máquina limpa, esconderia isso). A base é
+  // descartável por definição: apagar é o comportamento certo.
+  rmSync(databaseDir, { recursive: true, force: true });
+
   const pg = new EmbeddedPostgres({
-    databaseDir: '/tmp/evoluo-int-pg',
+    databaseDir,
     user: 'postgres',
     password: 'postgres',
     port,
