@@ -352,6 +352,9 @@ enum SpecialGoalStatus {
   pending
   completed
   cancelled
+  // Etapa 26: o alvo pode recusar, não só cumprir — ver
+  // supabase/migrations/20260912100000_special_goal_decline.sql
+  declined
 
   @@map("special_goal_status")
 }
@@ -374,6 +377,7 @@ model SpecialGoal {
   status            SpecialGoalStatus @default(pending)
   completedAt       DateTime?         @map("completed_at") @db.Timestamptz(6)
   cancelledAt       DateTime?         @map("cancelled_at") @db.Timestamptz(6)
+  declinedAt        DateTime?         @map("declined_at") @db.Timestamptz(6)
   createdAt         DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
 
   challenge       Challenge            @relation(fields: [challengeId], references: [id], onDelete: Cascade)

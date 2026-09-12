@@ -1,10 +1,11 @@
-import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { SpecialGoalStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { SpecialGoalsService } from './special-goals.service';
 
 describe('SpecialGoalsService', () => {
   let participantFindUnique: jest.Mock;
+  let specialGoalCount: jest.Mock;
   let specialGoalCreate: jest.Mock;
   let specialGoalFindMany: jest.Mock;
   let specialGoalFindUnique: jest.Mock;
@@ -14,6 +15,7 @@ describe('SpecialGoalsService', () => {
 
   beforeEach(() => {
     participantFindUnique = jest.fn();
+    specialGoalCount = jest.fn().mockResolvedValue(0);
     specialGoalCreate = jest.fn();
     specialGoalFindMany = jest.fn();
     specialGoalFindUnique = jest.fn();
@@ -22,6 +24,7 @@ describe('SpecialGoalsService', () => {
     prisma = {
       challengeParticipant: { findUnique: participantFindUnique },
       specialGoal: {
+        count: specialGoalCount,
         create: specialGoalCreate,
         findMany: specialGoalFindMany,
         findUnique: specialGoalFindUnique,
@@ -152,6 +155,87 @@ describe('SpecialGoalsService', () => {
       specialGoalFindUnique.mockResolvedValue(null);
 
       await expect(service.cancel('missing', 'u1')).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('create — limite anti-spam', () => {
+    // A regra original não tinha limite e nada pode ser apagado
+    // (prevent_special_goal_delete), então dava para encher a lista de
+    // alguém com tarefas-lixo permanentes.
+    it('rejects a 6th pending goal aimed at the same person', async () => {
+      participantFindUnique
+        .mockResolvedValueOnce({ id: 'p1', challengeId: 'c1', userId: 'u1' })
+        .mockResolvedValueOnce({ id: 'p2', challengeId: 'c1', userId: 'u2' });
+      specialGoalCount.mockResolvedValue(5);
+
+      await expect(
+        service.create('c1', 'u1', { toParticipantId: 'p2', title: 'mais uma' }),
+      ).rejects.toThrow(ConflictException);
+      expect(specialGoalCreate).not.toHaveBeenCalled();
+    });
+
+    // O teto é por PAR e só conta pendentes — cumprir ou recusar libera
+    // espaço imediatamente.
+    it('counts only pending goals for that exact pair', async () => {
+      participantFindUnique
+        .mockResolvedValueOnce({ id: 'p1', challengeId: 'c1', userId: 'u1' })
+        .mockResolvedValueOnce({ id: 'p2', challengeId: 'c1', userId: 'u2' });
+      specialGoalCount.mockResolvedValue(0);
+      specialGoalCreate.mockResolvedValue({ id: 's1' });
+
+      await service.create('c1', 'u1', { toParticipantId: 'p2', title: 'ok' });
+
+      expect(specialGoalCount).toHaveBeenCalledWith({
+        where: {
+          fromParticipantId: 'p1',
+          toParticipantId: 'p2',
+          status: SpecialGoalStatus.pending,
+        },
+      });
+    });
+  });
+
+  describe('decline', () => {
+    // Sem recusa a meta especial era de mão única: quem recebia não tinha
+    // saída nenhuma, porque nada pode ser apagado.
+    it('lets the target decline a pending goal', async () => {
+      specialGoalFindUnique.mockResolvedValue({
+        id: 's1',
+        status: SpecialGoalStatus.pending,
+        fromParticipant: { userId: 'u1' },
+        toParticipant: { userId: 'u2' },
+      });
+      specialGoalUpdate.mockResolvedValue({ id: 's1', status: SpecialGoalStatus.declined });
+
+      await service.decline('s1', 'u2');
+
+      expect(specialGoalUpdate).toHaveBeenCalledWith({
+        where: { id: 's1' },
+        data: { status: SpecialGoalStatus.declined, declinedAt: expect.any(Date) },
+      });
+    });
+
+    it('forbids the creator from declining on the target behalf', async () => {
+      specialGoalFindUnique.mockResolvedValue({
+        id: 's1',
+        status: SpecialGoalStatus.pending,
+        fromParticipant: { userId: 'u1' },
+        toParticipant: { userId: 'u2' },
+      });
+
+      await expect(service.decline('s1', 'u1')).rejects.toThrow(ForbiddenException);
+      expect(specialGoalUpdate).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('countPendingFor', () => {
+    it('counts what is waiting on this participant', async () => {
+      specialGoalCount.mockResolvedValue(3);
+
+      await expect(service.countPendingFor('p2')).resolves.toEqual({ participantId: 'p2', pending: 3 });
+      expect(specialGoalCount).toHaveBeenCalledWith({
+        where: { toParticipantId: 'p2', status: SpecialGoalStatus.pending },
+      });
     });
   });
 });

@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/feedback";
 import { Surface } from "@/components/ui/surface";
 import { getDailyHistory } from "@/lib/api/records";
+import { DayHeatmap } from "./day-heatmap";
 import { formatDateLong, formatValueForKind } from "@/lib/format/format";
 
 // Extraído de app/c/[challengeId]/history/page.tsx para ser reaproveitado
@@ -36,7 +37,10 @@ export function DailyHistoryView({ participantId }: { participantId: string }) {
   }
 
   return (
-    <ol className="flex flex-col gap-3">
+    <div className="flex flex-col gap-8">
+      <DayHeatmap participantId={participantId} />
+
+      <ol className="flex flex-col gap-3">
       {days.map((day) => (
         <li key={day.date}>
           <Surface className="p-4">
@@ -76,7 +80,8 @@ export function DailyHistoryView({ participantId }: { participantId: string }) {
             )}
           </Surface>
         </li>
-      ))}
-    </ol>
+        ))}
+      </ol>
+    </div>
   );
 }

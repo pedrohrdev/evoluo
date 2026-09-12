@@ -291,6 +291,33 @@ export class RecordsService {
     return { daily, weekly, monthly, challenge };
   }
 
+  // Série compacta de dias fechados, para o heatmap do ano — uma célula por
+  // dia. Separado de getHistory de propósito: aquele carrega também todos os
+  // registros de cada dia (até ~1.100 linhas num desafio de 365 dias), o que
+  // é desperdício quando a tela só precisa da intensidade por data.
+  async getDaySeries(participantId: string) {
+    const participant = await this.prisma.challengeParticipant.findUnique({
+      where: { id: participantId },
+      select: { id: true, challenge: { select: { startDate: true, endDate: true } } },
+    });
+
+    if (!participant) {
+      throw new NotFoundException('Participante não encontrado.');
+    }
+
+    const days = await this.prisma.dayResult.findMany({
+      where: { challengeParticipantId: participantId, closed: true },
+      orderBy: { resultDate: 'asc' },
+      select: { resultDate: true, completedGoalsCount: true, dayCompleted: true },
+    });
+
+    return {
+      startDate: participant.challenge.startDate,
+      endDate: participant.challenge.endDate,
+      days,
+    };
+  }
+
   // Histórico dia a dia (CLAUDE.md seção "Histórico" / IMPLEMENTATION_PLAN
   // etapa 11): só dias já FECHADOS por close_daily_period (day_results com
   // closed = true) — nunca "hoje", cujo estado tentativo já é exposto por

@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowRight, ClipboardCheck, Settings2, Trophy } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
+import { ChallengeFeed } from "@/components/challenge/challenge-feed";
 import { ChallengeResult } from "@/components/challenge/challenge-result";
 import { HeroStat } from "@/components/dashboard/hero-stat";
 import { CheckInModal } from "@/components/goals/check-in-modal";
@@ -234,6 +235,11 @@ export default function DashboardPage() {
             ))}
           </div>
         )}
+      </section>
+
+      <section>
+        <h2 className="mb-3 font-display text-lg font-semibold text-ink">No desafio</h2>
+        <ChallengeFeed challengeId={challengeId!} />
       </section>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">

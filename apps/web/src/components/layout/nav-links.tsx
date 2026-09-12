@@ -1,16 +1,36 @@
 "use client";
 
+import { useQuery } from "@tanstack/react-query";
 import { BarChart3, Gift, LayoutDashboard, ListChecks, Trophy } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { getPendingSpecialGoalsCount } from "@/lib/api/special-goals";
+import { useChallenge } from "@/lib/challenge/challenge-context";
 import { cn } from "@/lib/cn";
+
+// Quantas metas especiais esperam uma ação minha. Sem isto a funcionalidade
+// era invisível: não havia badge, contador nem notificação, e quem recebia
+// uma meta só descobria se abrisse a aba por conta própria.
+function usePendingSpecialGoals(): number {
+  const { participation } = useChallenge();
+  const participantId = participation?.participantId;
+
+  const { data } = useQuery({
+    queryKey: ["special-goals-pending", participantId],
+    queryFn: () => getPendingSpecialGoalsCount(participantId!),
+    enabled: !!participantId,
+    staleTime: 60_000,
+  });
+
+  return data?.pending ?? 0;
+}
 
 function useNavItems(challengeId: string) {
   const base = `/c/${challengeId}`;
   return [
     { href: base, label: "Painel", icon: LayoutDashboard, exact: true },
     { href: `${base}/ranking`, label: "Ranking", icon: Trophy },
-    { href: `${base}/special-goals`, label: "Especiais", icon: Gift },
+    { href: `${base}/special-goals`, label: "Entre amigos", icon: Gift, badge: true },
     { href: `${base}/history`, label: "Histórico", icon: ListChecks },
     { href: `${base}/analytics`, label: "Análises", icon: BarChart3 },
   ];
@@ -22,6 +42,7 @@ function useNavItems(challengeId: string) {
 export function NavLinks({ challengeId }: { challengeId: string }) {
   const pathname = usePathname();
   const items = useNavItems(challengeId);
+  const pending = usePendingSpecialGoals();
 
   return (
     <nav className="hidden items-center gap-1 sm:flex">
@@ -39,6 +60,11 @@ export function NavLinks({ challengeId }: { challengeId: string }) {
           >
             <Icon className="size-4" aria-hidden />
             <span>{item.label}</span>
+            {item.badge && pending > 0 ? (
+              <span className="ml-0.5 rounded-full bg-accent px-1.5 text-[11px] font-semibold text-accent-on">
+                {pending}
+              </span>
+            ) : null}
           </Link>
         );
       })}
@@ -49,6 +75,7 @@ export function NavLinks({ challengeId }: { challengeId: string }) {
 export function BottomNavBar({ challengeId }: { challengeId: string }) {
   const pathname = usePathname();
   const items = useNavItems(challengeId);
+  const pending = usePendingSpecialGoals();
 
   return (
     <nav
@@ -68,7 +95,14 @@ export function BottomNavBar({ challengeId }: { challengeId: string }) {
             )}
             aria-current={active ? "page" : undefined}
           >
-            <Icon className="size-5" aria-hidden />
+            <span className="relative">
+              <Icon className="size-5" aria-hidden />
+              {item.badge && pending > 0 ? (
+                <span className="absolute -right-2 -top-1 min-w-4 rounded-full bg-accent px-1 text-[10px] font-semibold leading-4 text-accent-on">
+                  {pending}
+                </span>
+              ) : null}
+            </span>
             {item.label}
           </Link>
         );

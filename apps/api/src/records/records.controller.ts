@@ -67,6 +67,12 @@ export class RecordsController {
     return this.recordsService.getHistory(participantId);
   }
 
+  // Série compacta para o heatmap do ano (uma célula por dia fechado).
+  @Get('challenge-participants/:participantId/day-series')
+  getDaySeries(@Param('participantId', ParseUUIDPipe) participantId: string) {
+    return this.recordsService.getDaySeries(participantId);
+  }
+
   // Estado do período ainda aberto (hoje/semana/mês/duração) — usado pelo
   // frontend (etapa 15) para restaurar o que já foi registrado ao
   // recarregar a página, já que o histórico (acima) só cobre períodos
