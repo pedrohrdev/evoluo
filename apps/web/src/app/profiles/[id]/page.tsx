@@ -5,6 +5,7 @@ import { ArrowLeft, Pencil, Swords } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
+import { Avatar } from "@/components/profile/avatar";
 import { EditProfileModal } from "@/components/profile/edit-profile-modal";
 import { HeroStat } from "@/components/dashboard/hero-stat";
 import { Badge } from "@/components/ui/badge";
@@ -47,9 +48,7 @@ export default function ProfilePage() {
 
       <div className="flex items-center justify-between gap-4">
         <div className="flex min-w-0 items-center gap-4">
-          <span className="flex size-14 shrink-0 items-center justify-center rounded-full bg-surface-3 font-display text-xl font-semibold text-ink">
-            {profile.displayName.charAt(0).toUpperCase()}
-          </span>
+          <Avatar displayName={profile.displayName} avatarUrl={profile.avatarUrl} className="size-14" />
           <div className="min-w-0">
             <h1 className="truncate font-display text-xl font-semibold text-ink">{profile.displayName}</h1>
             <p className="text-sm text-ink-muted">Desde {formatDateLong(profile.createdAt)}</p>

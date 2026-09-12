@@ -68,6 +68,10 @@ interface RequestOptions {
   auth?: boolean; // default true
 }
 
+function isFormData(body: unknown): body is FormData {
+  return typeof FormData !== "undefined" && body instanceof FormData;
+}
+
 // Wrapper único para toda chamada à API (proxeada via /api, ver
 // next.config.ts). Anexa o Bearer token, tenta um refresh automático em
 // caso de 401, e lança AuthRequiredError se mesmo assim não conseguir —
@@ -78,7 +82,9 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
 
   const doFetch = async (): Promise<Response> => {
     const headers: Record<string, string> = {};
-    if (body !== undefined) headers["Content-Type"] = "application/json";
+    // FormData (upload de arquivo): o browser define Content-Type sozinho,
+    // incluindo o boundary do multipart — setar manualmente quebraria o parse.
+    if (body !== undefined && !isFormData(body)) headers["Content-Type"] = "application/json";
 
     if (auth) {
       const session = readSession();
@@ -89,7 +95,7 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
     return fetch(`/api${path}`, {
       method,
       headers,
-      body: body !== undefined ? JSON.stringify(body) : undefined,
+      body: body === undefined ? undefined : isFormData(body) ? body : JSON.stringify(body),
     });
   };
 

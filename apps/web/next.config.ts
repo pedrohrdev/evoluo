@@ -7,6 +7,9 @@ import type { NextConfig } from "next";
 const API_PROXY_ORIGIN = process.env.API_PROXY_ORIGIN ?? "http://localhost:3001";
 
 const nextConfig: NextConfig = {
+  // Some o indicador flutuante de rota (o "botão" que o Next mostra em
+  // dev) — puramente cosmético, não afeta build/erros em produção.
+  devIndicators: false,
   async rewrites() {
     return [
       {

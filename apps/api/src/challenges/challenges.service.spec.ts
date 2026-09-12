@@ -1,4 +1,4 @@
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import { ConflictException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ChallengesService } from './challenges.service';
@@ -6,8 +6,10 @@ import { ChallengesService } from './challenges.service';
 describe('ChallengesService', () => {
   let challengeCreate: jest.Mock;
   let challengeFindUnique: jest.Mock;
+  let challengeDelete: jest.Mock;
   let participantCreate: jest.Mock;
   let participantFindUnique: jest.Mock;
+  let executeRaw: jest.Mock;
   let transaction: jest.Mock;
   let prisma: PrismaService;
   let service: ChallengesService;
@@ -15,21 +17,24 @@ describe('ChallengesService', () => {
   beforeEach(() => {
     challengeCreate = jest.fn();
     challengeFindUnique = jest.fn();
+    challengeDelete = jest.fn();
     participantCreate = jest.fn();
     participantFindUnique = jest.fn();
+    executeRaw = jest.fn().mockResolvedValue(undefined);
 
     // $transaction aqui só encaminha o callback para um "tx" que reusa os
     // mesmos mocks de challenge/challengeParticipant — suficiente para
     // testar o que o service manda gravar, sem um Postgres real.
     transaction = jest.fn((callback: (tx: unknown) => unknown) =>
       callback({
-        challenge: { create: challengeCreate },
+        challenge: { create: challengeCreate, delete: challengeDelete },
         challengeParticipant: { create: participantCreate },
+        $executeRaw: executeRaw,
       }),
     );
 
     prisma = {
-      challenge: { create: challengeCreate, findUnique: challengeFindUnique },
+      challenge: { create: challengeCreate, findUnique: challengeFindUnique, delete: challengeDelete },
       challengeParticipant: { create: participantCreate, findUnique: participantFindUnique },
       $transaction: transaction,
     } as unknown as PrismaService;
@@ -132,6 +137,38 @@ describe('ChallengesService', () => {
       participantCreate.mockRejectedValue(unrelatedError);
 
       await expect(service.join('u2', { joinCode: 'ABCD1234' })).rejects.toThrow(unrelatedError);
+    });
+  });
+
+  describe('remove', () => {
+    it('lets the creator delete the challenge after lifting the goal_versions immutability bypass', async () => {
+      challengeFindUnique.mockResolvedValue({ id: 'c1', createdBy: 'u1' });
+      challengeDelete.mockResolvedValue({ id: 'c1' });
+
+      await service.remove('c1', 'u1');
+
+      expect(challengeFindUnique).toHaveBeenCalledWith({
+        where: { id: 'c1' },
+        select: { id: true, createdBy: true },
+      });
+      expect(transaction).toHaveBeenCalledTimes(1);
+      expect(executeRaw).toHaveBeenCalledTimes(1);
+      expect(challengeDelete).toHaveBeenCalledWith({ where: { id: 'c1' } });
+    });
+
+    it('throws NotFoundException when the challenge does not exist', async () => {
+      challengeFindUnique.mockResolvedValue(null);
+
+      await expect(service.remove('missing', 'u1')).rejects.toThrow(NotFoundException);
+      expect(transaction).not.toHaveBeenCalled();
+    });
+
+    it('throws ForbiddenException when the requester is not the creator', async () => {
+      challengeFindUnique.mockResolvedValue({ id: 'c1', createdBy: 'someone-else' });
+
+      await expect(service.remove('c1', 'u1')).rejects.toThrow(ForbiddenException);
+      expect(transaction).not.toHaveBeenCalled();
+      expect(challengeDelete).not.toHaveBeenCalled();
     });
   });
 });

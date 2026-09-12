@@ -2,6 +2,7 @@
 
 import { use } from "react";
 import { AppShell } from "@/components/layout/app-shell";
+import { ChallengeSettingsMenu } from "@/components/challenge/challenge-settings-menu";
 import { JoinCodeBadge } from "@/components/challenge/join-code-badge";
 import { EmptyState } from "@/components/ui/feedback";
 import { LoadingState } from "@/components/ui/feedback";
@@ -42,7 +43,12 @@ function ChallengeGate({ children }: { children: React.ReactNode }) {
     <AppShell
       challengeId={participation.challengeId}
       challengeName={participation.challengeName}
-      headerExtra={<JoinCodeBadge challengeId={participation.challengeId} />}
+      headerExtra={
+        <div className="flex items-center gap-2">
+          <JoinCodeBadge challengeId={participation.challengeId} />
+          <ChallengeSettingsMenu challengeId={participation.challengeId} />
+        </div>
+      }
     >
       {children}
     </AppShell>

@@ -1,6 +1,7 @@
-import { NotFoundException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { GoalsService } from '../goals/goals.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { SupabaseService } from '../supabase/supabase.service';
 import { ProfilesService } from './profiles.service';
 
 describe('ProfilesService', () => {
@@ -8,8 +9,11 @@ describe('ProfilesService', () => {
   let update: jest.Mock;
   let participantFindMany: jest.Mock;
   let findAllForParticipants: jest.Mock;
+  let storageUpload: jest.Mock;
+  let storageGetPublicUrl: jest.Mock;
   let prisma: PrismaService;
   let goalsService: GoalsService;
+  let supabase: SupabaseService;
   let service: ProfilesService;
 
   beforeEach(() => {
@@ -17,12 +21,21 @@ describe('ProfilesService', () => {
     update = jest.fn();
     participantFindMany = jest.fn();
     findAllForParticipants = jest.fn().mockResolvedValue(new Map());
+    storageUpload = jest.fn().mockResolvedValue({ error: null });
+    storageGetPublicUrl = jest.fn().mockReturnValue({ data: { publicUrl: 'https://cdn.test/avatars/u1/avatar.jpg' } });
     prisma = {
       profile: { findUnique, update },
       challengeParticipant: { findMany: participantFindMany },
     } as unknown as PrismaService;
     goalsService = { findAllForParticipants } as unknown as GoalsService;
-    service = new ProfilesService(prisma, goalsService);
+    supabase = {
+      adminClient: {
+        storage: {
+          from: jest.fn().mockReturnValue({ upload: storageUpload, getPublicUrl: storageGetPublicUrl }),
+        },
+      },
+    } as unknown as SupabaseService;
+    service = new ProfilesService(prisma, goalsService, supabase);
   });
 
   describe('findById', () => {
@@ -168,6 +181,48 @@ describe('ProfilesService', () => {
         NotFoundException,
       );
       expect(update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('uploadAvatar', () => {
+    const file = { buffer: Buffer.from('fake-image'), mimetype: 'image/jpeg' };
+
+    it('uploads to the fixed per-user path and saves the public URL with a cache-busting param', async () => {
+      findUnique.mockResolvedValue({ id: 'u1' });
+      update.mockResolvedValue({ id: 'u1', avatarUrl: 'https://cdn.test/avatars/u1/avatar.jpg?v=1' });
+
+      await service.uploadAvatar('u1', file);
+
+      expect(storageUpload).toHaveBeenCalledWith('u1/avatar.jpg', file.buffer, {
+        contentType: 'image/jpeg',
+        upsert: true,
+      });
+      const data = update.mock.calls[0][0].data;
+      expect(data.avatarUrl).toMatch(/^https:\/\/cdn\.test\/avatars\/u1\/avatar\.jpg\?v=\d+$/);
+    });
+
+    it('rejects an unsupported mime type before touching storage', async () => {
+      findUnique.mockResolvedValue({ id: 'u1' });
+
+      await expect(service.uploadAvatar('u1', { buffer: Buffer.from(''), mimetype: 'application/pdf' })).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(storageUpload).not.toHaveBeenCalled();
+    });
+
+    it('translates a storage upload error into BadRequestException', async () => {
+      findUnique.mockResolvedValue({ id: 'u1' });
+      storageUpload.mockResolvedValue({ error: { message: 'bucket indisponível' } });
+
+      await expect(service.uploadAvatar('u1', file)).rejects.toThrow(BadRequestException);
+      expect(update).not.toHaveBeenCalled();
+    });
+
+    it('propagates NotFoundException for a non-existent profile', async () => {
+      findUnique.mockResolvedValue(null);
+
+      await expect(service.uploadAvatar('missing', file)).rejects.toThrow(NotFoundException);
+      expect(storageUpload).not.toHaveBeenCalled();
     });
   });
 });

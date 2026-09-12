@@ -22,6 +22,8 @@ Em `supabase/migrations/`, na ordem em que devem rodar:
 | `20260905090800_day_results_and_ledger.sql` | `day_results`, `points_ledger` + trigger de atualização tentativa |
 | `20260905090900_closing_jobs_and_cron.sql` | `close_daily_period`, `close_period_records` + agendamento `pg_cron` |
 | `20260906090000_instant_daily_checkin.sql` | `check_in_daily_period` — fechamento instantâneo do dia de hoje, chamado pelo participante ao concluir o check-in (ver seção "Fechamento instantâneo do check-in" abaixo) |
+| `20260911090000_delete_challenge.sql` | Ajusta `prevent_goal_version_delete` para permitir o hard-delete completo de um desafio (flag local de transação, só usada por `ChallengesService.remove`) |
+| `20260911091500_avatars_storage.sql` | Bucket `avatars` do Supabase Storage (público, 5MB, jpeg/png/webp) + policy de leitura pública em `storage.objects` |
 
 Rodam com `supabase db push` (ou `supabase migration up` num projeto linkado) ou, num Postgres qualquer, com `psql -f` em ordem. Nenhuma foi pensada para rodar fora de ordem — cada uma assume que as anteriores já existem.
 
@@ -104,7 +106,7 @@ Todas as tabelas têm RLS habilitado. Padrão usado em todas: **leitura liberada
 | `generate_join_code` | função | Código de 8 caracteres, alfabeto sem ambiguidade, usado como default de `challenges.join_code` |
 | `set_left_at_on_deactivate` | trigger em `challenge_participants` | Preenche/limpa `left_at` ao mudar `status` |
 | `enforce_daily_goal_limit` | trigger em `goals` | Nunca permite a 4ª meta diária |
-| `prevent_goal_version_mutation` / `prevent_goal_version_delete` | triggers em `goal_versions` | Bloqueiam qualquer alteração de conteúdo ou apagamento de uma versão, mesmo fora do RLS — **testado**: tentativa como `postgres` (bypassa RLS) de mudar `target_value` de uma versão fechada, de reabri-la, e de apagá-la — as três falharam com o erro do trigger |
+| `prevent_goal_version_mutation` / `prevent_goal_version_delete` | triggers em `goal_versions` | Bloqueiam qualquer alteração de conteúdo ou apagamento de uma versão, mesmo fora do RLS — **testado**: tentativa como `postgres` (bypassa RLS) de mudar `target_value` de uma versão fechada, de reabri-la, e de apagá-la — as três falharam com o erro do trigger. Única exceção (`20260911090000_delete_challenge.sql`): dentro da transação de um hard-delete de desafio inteiro, `ChallengesService.remove` liga uma flag local (`SET LOCAL app.bypass_goal_version_immutability = 'on'`, nunca persiste além do COMMIT) que deixa o cascade da exclusão passar — não existe outro caminho que ligue essa flag |
 | `set_goal_version` | função `security definer` | Único caminho para editar uma meta: fecha a versão vigente e abre a nova, atomicamente, validando o dono |
 | `compute_daily_record_fields` / `compute_period_record_fields` | triggers `before insert/update` nas 4 tabelas de registro | Calculam `kind`/`importance`/`target_value_snapshot` a partir do `goal_version`, decidem `completed` (`actual_value >= target`, sem proporcionalidade) e `points_awarded` (0 se não cumpriu; da tabela `points_config` se cumpriu) — sobrescrevem qualquer valor que o cliente tente enviar nesses campos |
 | `enforce_daily_record_window` / `enforce_period_record_window` | triggers `before insert/update` | Só permitem gravar/editar o período ainda vigente (hoje, ou a semana/mês/desafio em curso), no fuso fixo `America/Sao_Paulo` — **testado**: pegou um caso real de borda de fuso (usar a data do servidor em vez da data em São Paulo levou à rejeição correta) |
