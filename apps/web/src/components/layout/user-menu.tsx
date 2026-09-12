@@ -1,6 +1,6 @@
 "use client";
 
-import { LogOut, User, Volume2, VolumeX } from "lucide-react";
+import { LogOut, Swords, User, Volume2, VolumeX } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Dropdown, DropdownContent, DropdownItem, DropdownSeparator, DropdownTrigger } from "@/components/ui/dropdown";
@@ -31,6 +31,15 @@ export function UserMenu() {
           <Link href={`/profiles/${session.userId}`}>
             <User className="size-4" aria-hidden />
             Meu perfil
+          </Link>
+        </DropdownItem>
+        {/* /onboarding agora entra direto no painel do desafio mais ativo
+            (pedido do usuário) — ?all=1 pula esse redirect pra deixar
+            trocar de desafio ou criar/entrar em outro. */}
+        <DropdownItem asChild>
+          <Link href="/onboarding?all=1">
+            <Swords className="size-4" aria-hidden />
+            Meus desafios
           </Link>
         </DropdownItem>
         <DropdownItem onSelect={(e) => e.preventDefault()} onClick={() => setEnabled(!enabled)}>

@@ -14,28 +14,10 @@ import { ErrorState, LoadingState } from "@/components/ui/feedback";
 import { Surface } from "@/components/ui/surface";
 import { StreakFlame } from "@/components/streak/streak-flame";
 import { getProfile, profileQueryKey } from "@/lib/api/profiles";
-import type { ProfileChallengeParticipation } from "@/lib/api/types";
 import { useAuth } from "@/lib/auth/auth-context";
 import { useRequireAuth } from "@/lib/auth/use-require-auth";
+import { pickDefaultChallenge } from "@/lib/challenge/pick-default-challenge";
 import { formatDateLong } from "@/lib/format/format";
-
-// Qual desafio mostrar de cara quando a pessoa está em mais de um: o mais
-// recentemente ativo (último check-in diário). Quem nunca fez check-in em
-// nenhum entra pelo mais recém-entrado — `profile.challenges` já vem
-// ordenado por joinedAt desc (ProfilesService.getPublicProfile), então
-// challenges[0] já é esse.
-function pickDefaultChallenge(
-  challenges: ProfileChallengeParticipation[],
-): ProfileChallengeParticipation | undefined {
-  if (challenges.length === 0) return undefined;
-
-  const withCheckIn = challenges.filter((c): c is ProfileChallengeParticipation & { lastCheckInDate: string } =>
-    Boolean(c.lastCheckInDate),
-  );
-  if (withCheckIn.length === 0) return challenges[0];
-
-  return withCheckIn.reduce((latest, c) => (c.lastCheckInDate > latest.lastCheckInDate ? c : latest));
-}
 
 export default function ProfilePage() {
   const { id } = useParams<{ id: string }>();
