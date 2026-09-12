@@ -12,6 +12,7 @@ import { PrismaModule } from './prisma/prisma.module';
 import { ProfilesModule } from './profiles/profiles.module';
 import { RankingModule } from './ranking/ranking.module';
 import { RecordsModule } from './records/records.module';
+import { SpecialGoalsModule } from './special-goals/special-goals.module';
 import { StreakModule } from './streak/streak.module';
 import { SupabaseModule } from './supabase/supabase.module';
 
@@ -36,6 +37,7 @@ import { SupabaseModule } from './supabase/supabase.module';
     StreakModule,
     RankingModule,
     AnalyticsModule,
+    SpecialGoalsModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })

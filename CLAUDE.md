@@ -139,6 +139,19 @@ Perfis são **públicos** para qualquer usuário autenticado no aplicativo, mesm
 - O fechamento de dia/período usa um fuso horário fixo do servidor (`America/Sao_Paulo`) para todos os participantes, independente do fuso de cada um.
 - Um desafio pode ser criado com `start_date` no futuro (ex.: combinar com os amigos de começar todo mundo junto numa segunda-feira específica). Antes dessa data, ninguém pode registrar nem fazer check-in de nenhuma meta (diária, semanal, mensal ou de duração) — mas já dá pra entrar no desafio e configurar as próprias metas com antecedência.
 
+### Metas especiais entre participantes
+
+Decisão de negócio confirmada com o usuário na etapa 22 (fora do modelo de metas das seções acima — não é uma 5ª categoria de `Goal`/`GoalVersion`, é sua própria entidade):
+
+- Qualquer participante de um desafio pode atribuir uma **meta especial** a outro participante do **mesmo desafio**.
+- Aplicada direto, **sem aceite** do alvo.
+- Sempre do tipo **sim/não** (cumpriu ou não) — nunca horas/quantidade.
+- **Sem prazo fixo**: pode ser cumprida a qualquer momento, não é presa a um dia/semana/mês/duração do desafio.
+- **Puramente social**: nunca gera pontos, nunca conta para streak, nunca entra em nenhum critério de ranking.
+- Quem criou pode **cancelar** enquanto ainda estiver pendente. Só o alvo pode marcá-la como **cumprida**. Depois de cumprida ou cancelada, é definitiva (sem reabrir, sem editar).
+- Sem limite de metas especiais simultâneas por participante (nem enviadas, nem recebidas).
+- **Pública dentro do desafio**, como as demais metas/histórico (seção "Perfis" acima).
+
 ## 3. Stack e arquitetura (resumo — detalhes em `docs/arquitetura-tecnica.md`)
 
 - TypeScript de ponta a ponta.
@@ -147,7 +160,7 @@ Perfis são **públicos** para qualquer usuário autenticado no aplicativo, mesm
 - ORM: Prisma.
 - Frontend: Next.js (App Router).
 - Autenticação: Supabase Auth.
-- Módulos do backend: Challenges, Participants, Goals, Records (Daily/Weekly/Monthly/Duration), Day Evaluation, Scoring, Streak, Ranking, Analytics.
+- Módulos do backend: Challenges, Participants, Goals, Records (Daily/Weekly/Monthly/Duration), Day Evaluation, Scoring, Streak, Ranking, Analytics, SpecialGoals.
 
 A camada de banco de dados (etapa 2 do plano) já está implementada e testada — ver `docs/database-schema.md` para o schema completo, incluindo RLS, triggers e jobs de fechamento.
 

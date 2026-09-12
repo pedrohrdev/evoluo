@@ -24,6 +24,7 @@ Em `supabase/migrations/`, na ordem em que devem rodar:
 | `20260906090000_instant_daily_checkin.sql` | `check_in_daily_period` — fechamento instantâneo do dia de hoje, chamado pelo participante ao concluir o check-in (ver seção "Fechamento instantâneo do check-in" abaixo) |
 | `20260911090000_delete_challenge.sql` | Ajusta `prevent_goal_version_delete` para permitir o hard-delete completo de um desafio (flag local de transação, só usada por `ChallengesService.remove`) |
 | `20260911091500_avatars_storage.sql` | Bucket `avatars` do Supabase Storage (público, 5MB, jpeg/png/webp) + policy de leitura pública em `storage.objects` |
+| `20260911100000_special_goals.sql` | `special_goals` (etapa 22, decisão de negócio nova — ver `arquitetura-tecnica.md` seção 2 e `CLAUDE.md` seção 2 "Metas especiais entre participantes"), triggers de mesmo-desafio e de imutabilidade de transição, RLS |
 
 Rodam com `supabase db push` (ou `supabase migration up` num projeto linkado) ou, num Postgres qualquer, com `psql -f` em ordem. Nenhuma foi pensada para rodar fora de ordem — cada uma assume que as anteriores já existem.
 
@@ -58,6 +59,7 @@ points_config (tabela de referência, sem FK — lookup por importance+period_ty
 | `goal_period` | `daily`, `weekly`, `monthly`, `challenge` | Periodicidade (`challenge` = meta de duração/longo prazo) |
 | `importance_level` | `low`, `medium`, `high` | Importância da meta, chave de `points_config` |
 | `participant_status` | `active`, `inactive` | Status do participante no desafio |
+| `special_goal_status` | `pending`, `completed`, `cancelled` | Status de uma meta especial (etapa 22) |
 
 ## Tabelas
 
@@ -73,6 +75,7 @@ points_config (tabela de referência, sem FK — lookup por importance+period_ty
 | `day_results` | Um por participante por dia: quantas das 3 diárias foram cumpridas, se o dia fechou, streak resultante. |
 | `points_ledger` | Lançamento append-only de pontos — a trilha de auditoria de onde veio cada ponto. |
 | `points_config` | Tabela de configuração: pontos por `importance` × `period_type`. |
+| `special_goals` | Etapa 22: tarefa avulsa entre dois participantes do mesmo desafio (`from_participant_id` → `to_participant_id`), sempre sim/não, sem período. Fora do par `goals`/`goal_versions` — não referencia nenhuma das duas, e nenhuma tabela de Scoring/Streak/Ranking a referencia de volta. |
 
 ## Constraints principais
 
@@ -96,6 +99,8 @@ Todas as tabelas têm RLS habilitado. Padrão usado em todas: **leitura liberada
 
 `goal_versions` não tem policy de insert nem de update para `authenticated` — toda escrita passa pela função `set_goal_version()`, que valida o dono e faz a transição fechar-versão-antiga/abrir-versão-nova numa transação só.
 
+`special_goals` segue o mesmo padrão de leitura pública, mas a escrita tem três policies em vez de "dono da linha": insert só pelo dono de `from_participant_id`; e duas policies de update distintas — o dono de `to_participant_id` só pode transicionar `pending → completed`, o dono de `from_participant_id` só pode transicionar `pending → cancelled` (cada uma com `using`/`with check` restringindo a direção). O trigger `enforce_special_goal_transition` é quem realmente barra qualquer outra tentativa (inclusive fora do RLS); as policies são a primeira linha de defesa.
+
 **Sobre `NestJS` e RLS**: a decisão em `arquitetura-tecnica.md` foi que o NestJS é a única porta de entrada dos dados (não expor a API automática do Supabase). Na prática, isso normalmente significa que o NestJS/Prisma conecta usando a connection string de acesso direto do Supabase (role `postgres`, que ignora RLS por ser superusuário) e implementa as mesmas checagens de posse em código. As policies aqui continuam valendo como **defesa em profundidade**: protegem qualquer acesso direto ao banco via chave `anon`/`authenticated` do Supabase, hoje ou no futuro (ex.: se o frontend um dia passar a ler dados públicos direto do Supabase para aliviar o NestJS, ou usar Realtime).
 
 ## Funções e triggers
@@ -114,6 +119,9 @@ Todas as tabelas têm RLS habilitado. Padrão usado em todas: **leitura liberada
 | `close_daily_period(date)` | função `security definer`, chamada pelo cron | Decide streak (mantém/quebra), grava `day_results` definitivo, credita pontos das metas diárias cumpridas — idempotente (**testado**: rodar duas vezes para o mesmo dia não duplica pontos nem re-processa) |
 | `close_period_records(text, date)` | função `security definer`, chamada pelo cron | Mesma lógica de fechamento para semanal/mensal/desafio, sem tocar em streak |
 | `check_in_daily_period(uuid)` | função `security definer`, chamada por `RecordsService.checkInDaily` (NestJS) | Fecha o dia de **hoje**, na hora, para um único participante — mesma lógica de `close_daily_period`, mas disparada pelo check-in do participante em vez de esperar o cron. Só pode ser chamada uma vez por dia por participante (rejeita se `day_results.closed` já for `true`) |
+| `enforce_special_goal_same_challenge` | trigger `before insert` em `special_goals` | Garante, mesmo fora do RLS, que `from_participant_id` e `to_participant_id` pertencem ao `challenge_id` informado |
+| `enforce_special_goal_transition` | trigger `before update` em `special_goals` | Uma vez `completed`/`cancelled`, a linha nunca muda mais; de `pending` só permite ir para `completed` (com `completed_at`) ou `cancelled` (com `cancelled_at`), nunca alterar `title` ou os participantes |
+| `prevent_special_goal_delete` | trigger `before delete` em `special_goals` | Bloqueia qualquer apagamento — histórico imutável, mesmo padrão de `goal_versions` |
 
 ## Fechamento de período (por que era só um job, e por que hoje também pode ser instantâneo)
 

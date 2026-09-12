@@ -5,6 +5,7 @@ export type GoalPeriod = "daily" | "weekly" | "monthly" | "challenge";
 export type GoalKind = "hours" | "quantity" | "boolean";
 export type Importance = "low" | "medium" | "high";
 export type ParticipantStatus = "active" | "inactive";
+export type SpecialGoalStatus = "pending" | "completed" | "cancelled";
 
 export interface Challenge {
   id: string;
@@ -145,6 +146,21 @@ export interface KindAggregate {
 export interface GoalAnalytics extends Goal {
   recordsCount: number;
   byKind: KindAggregate[];
+}
+
+// Tarefa avulsa entre dois participantes do mesmo desafio — sempre
+// sim/não, sem prazo, puramente social (nunca gera pontos nem afeta
+// streak/ranking). Ver CLAUDE.md seção 2 "Outras regras já confirmadas".
+export interface SpecialGoal {
+  id: string;
+  challengeId: string;
+  fromParticipantId: string;
+  toParticipantId: string;
+  title: string;
+  status: SpecialGoalStatus;
+  completedAt: string | null;
+  cancelledAt: string | null;
+  createdAt: string;
 }
 
 export interface TodayState {
