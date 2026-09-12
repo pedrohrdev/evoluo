@@ -8,6 +8,7 @@ describe('ProfilesService', () => {
   let findUnique: jest.Mock;
   let update: jest.Mock;
   let participantFindMany: jest.Mock;
+  let dailyRecordGroupBy: jest.Mock;
   let findAllForParticipants: jest.Mock;
   let storageUpload: jest.Mock;
   let storageGetPublicUrl: jest.Mock;
@@ -20,12 +21,14 @@ describe('ProfilesService', () => {
     findUnique = jest.fn();
     update = jest.fn();
     participantFindMany = jest.fn();
+    dailyRecordGroupBy = jest.fn().mockResolvedValue([]);
     findAllForParticipants = jest.fn().mockResolvedValue(new Map());
     storageUpload = jest.fn().mockResolvedValue({ error: null });
     storageGetPublicUrl = jest.fn().mockReturnValue({ data: { publicUrl: 'https://cdn.test/avatars/u1/avatar.jpg' } });
     prisma = {
       profile: { findUnique, update },
       challengeParticipant: { findMany: participantFindMany },
+      dailyRecord: { groupBy: dailyRecordGroupBy },
     } as unknown as PrismaService;
     goalsService = { findAllForParticipants } as unknown as GoalsService;
     supabase = {
@@ -114,10 +117,63 @@ describe('ProfilesService', () => {
             longestStreak: 9,
             totalPoints: 220,
             totalDaysCompleted: 4,
+            lastCheckInDate: null,
             goals,
           },
         ],
       });
+    });
+
+    it('includes the last daily check-in date per participation, from a single groupBy aggregation', async () => {
+      findUnique.mockResolvedValue({ id: 'u1' });
+      participantFindMany.mockResolvedValue([
+        {
+          id: 'p1',
+          status: 'active',
+          joinedAt: new Date('2026-01-05'),
+          leftAt: null,
+          currentStreak: 4,
+          longestStreak: 9,
+          totalPoints: 220,
+          totalDaysCompleted: 4,
+          challenge: { id: 'c1', name: 'Desafio A', durationDays: 30, startDate: new Date(), endDate: new Date() },
+        },
+        {
+          id: 'p2',
+          status: 'active',
+          joinedAt: new Date('2026-01-01'),
+          leftAt: null,
+          currentStreak: 0,
+          longestStreak: 2,
+          totalPoints: 30,
+          totalDaysCompleted: 1,
+          challenge: { id: 'c2', name: 'Desafio B', durationDays: 30, startDate: new Date(), endDate: new Date() },
+        },
+      ]);
+      dailyRecordGroupBy.mockResolvedValue([
+        { challengeParticipantId: 'p1', _max: { recordDate: new Date('2026-03-10') } },
+        { challengeParticipantId: 'p2', _max: { recordDate: new Date('2026-02-01') } },
+      ]);
+
+      const result = await service.getPublicProfile('u1');
+
+      expect(dailyRecordGroupBy).toHaveBeenCalledWith({
+        by: ['challengeParticipantId'],
+        where: { challengeParticipantId: { in: ['p1', 'p2'] } },
+        _max: { recordDate: true },
+      });
+      expect(result.challenges.find((c) => c.participantId === 'p1')?.lastCheckInDate).toEqual(new Date('2026-03-10'));
+      expect(result.challenges.find((c) => c.participantId === 'p2')?.lastCheckInDate).toEqual(new Date('2026-02-01'));
+    });
+
+    it('skips the groupBy call when there are no participations', async () => {
+      findUnique.mockResolvedValue({ id: 'u1' });
+      participantFindMany.mockResolvedValue([]);
+
+      const result = await service.getPublicProfile('u1');
+
+      expect(dailyRecordGroupBy).not.toHaveBeenCalled();
+      expect(result.challenges).toEqual([]);
     });
 
     it('includes inactive participations too, since leaving a challenge does not erase the profile history', async () => {

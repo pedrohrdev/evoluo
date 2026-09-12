@@ -14,9 +14,28 @@ import { ErrorState, LoadingState } from "@/components/ui/feedback";
 import { Surface } from "@/components/ui/surface";
 import { StreakFlame } from "@/components/streak/streak-flame";
 import { getProfile, profileQueryKey } from "@/lib/api/profiles";
+import type { ProfileChallengeParticipation } from "@/lib/api/types";
 import { useAuth } from "@/lib/auth/auth-context";
 import { useRequireAuth } from "@/lib/auth/use-require-auth";
 import { formatDateLong } from "@/lib/format/format";
+
+// Qual desafio mostrar de cara quando a pessoa está em mais de um: o mais
+// recentemente ativo (último check-in diário). Quem nunca fez check-in em
+// nenhum entra pelo mais recém-entrado — `profile.challenges` já vem
+// ordenado por joinedAt desc (ProfilesService.getPublicProfile), então
+// challenges[0] já é esse.
+function pickDefaultChallenge(
+  challenges: ProfileChallengeParticipation[],
+): ProfileChallengeParticipation | undefined {
+  if (challenges.length === 0) return undefined;
+
+  const withCheckIn = challenges.filter((c): c is ProfileChallengeParticipation & { lastCheckInDate: string } =>
+    Boolean(c.lastCheckInDate),
+  );
+  if (withCheckIn.length === 0) return challenges[0];
+
+  return withCheckIn.reduce((latest, c) => (c.lastCheckInDate > latest.lastCheckInDate ? c : latest));
+}
 
 export default function ProfilePage() {
   const { id } = useParams<{ id: string }>();
@@ -34,21 +53,23 @@ export default function ProfilePage() {
 
   const isOwn = session?.userId === id;
 
-  // Perfil de outra pessoa com um único desafio: pula a listagem (que só
-  // teria 1 item pra clicar) e vai direto pras metas dele — pedido do
-  // usuário. router.replace (não push) pra essa página nunca fique presa
-  // no histórico entre o desafio e quem visitou o perfil (ver comentário
-  // em profiles/[id]/challenges/[challengeId]/layout.tsx sobre o mesmo
-  // cuidado com histórico duplicado).
+  // Perfil de outra pessoa: pula a listagem de desafios (que exigiria mais
+  // um clique só pra ver as metas) e vai direto pras metas do desafio mais
+  // recentemente ativo dela — pedido do usuário. Os demais desafios (se
+  // houver) viram opção pra trocar dentro da própria tela de metas
+  // (ver profiles/[id]/challenges/[challengeId]/layout.tsx). router.replace
+  // (não push) pra essa página nunca fique presa no histórico entre o
+  // desafio e quem visitou o perfil.
   useEffect(() => {
-    if (!isOwn && profile && profile.challenges.length === 1) {
-      router.replace(`/profiles/${id}/challenges/${profile.challenges[0].challengeId}`);
+    if (!isOwn && profile && profile.challenges.length > 0) {
+      const target = pickDefaultChallenge(profile.challenges);
+      if (target) router.replace(`/profiles/${id}/challenges/${target.challengeId}`);
     }
   }, [isOwn, profile, id, router]);
 
   if (!isReady || isLoading) return <LoadingState label="Carregando perfil…" />;
   if (isError || !profile) return <ErrorState message="Não foi possível carregar este perfil." onRetry={() => void refetch()} />;
-  if (!isOwn && profile.challenges.length === 1) return <LoadingState label="Carregando perfil…" />;
+  if (!isOwn && profile.challenges.length > 0) return <LoadingState label="Carregando perfil…" />;
   const bestStreak = Math.max(0, ...profile.challenges.map((c) => c.currentStreak));
   const totalPoints = profile.challenges.reduce((sum, c) => sum + c.totalPoints, 0);
 
@@ -81,6 +102,11 @@ export default function ProfilePage() {
         <HeroStat label="Desafios" value={profile.challenges.length} />
       </Surface>
 
+      {/* Só chega aqui em duas situações: é o próprio dono do perfil (que
+          quer ver/gerenciar todos os desafios dele, não só o mais ativo),
+          ou a pessoa visitada não está em nenhum desafio ainda — perfil de
+          outra pessoa COM desafio nunca renderiza esta lista, o effect
+          acima já redireciona direto pras metas antes disso. */}
       <section className="mt-8">
         <h2 className="mb-3 font-display text-lg font-semibold text-ink">Desafios</h2>
         {profile.challenges.length === 0 ? (
@@ -90,16 +116,14 @@ export default function ProfilePage() {
             {profile.challenges.map((c) => (
               <li key={c.participantId}>
                 <Link
-                  href={isOwn ? `/c/${c.challengeId}` : `/profiles/${id}/challenges/${c.challengeId}`}
+                  href={`/c/${c.challengeId}`}
                   className="flex items-center justify-between gap-3 rounded-md border border-line bg-surface-1 px-4 py-3.5 transition-colors hover:border-line-strong"
                 >
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <Swords className="size-4 shrink-0 text-ink-faint" aria-hidden />
                       <p className="truncate font-medium text-ink">{c.challengeName}</p>
-                      {c.status === "inactive" ? (
-                        <Badge tone="neutral">{isOwn ? "Você saiu" : "Saiu"}</Badge>
-                      ) : null}
+                      {c.status === "inactive" ? <Badge tone="neutral">Você saiu</Badge> : null}
                     </div>
                     <p className="mt-0.5 pl-6 text-xs text-ink-muted">
                       {c.totalDaysCompleted} dia(s) concluído(s) · {c.goals.length} meta(s)
