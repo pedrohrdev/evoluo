@@ -22,3 +22,9 @@ export function createGoal(participantId: string, input: GoalVersionInput & { pe
 export function updateGoalVersion(goalId: string, input: GoalVersionInput) {
   return apiFetch<GoalVersion>(`/goals/${goalId}`, { method: "PATCH", body: input });
 }
+
+// Linha do tempo de edições de uma meta — o que torna visível que alguém
+// mudou o próprio alvo no meio do desafio.
+export function listGoalVersions(goalId: string) {
+  return apiFetch<GoalVersion[]>(`/goals/${goalId}/versions`);
+}

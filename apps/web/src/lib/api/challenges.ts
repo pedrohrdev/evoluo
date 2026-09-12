@@ -1,5 +1,5 @@
 import { apiFetch } from "./client";
-import type { Challenge, ChallengeJoinCode } from "./types";
+import type { Challenge, ChallengeJoinCode, ChallengePreview } from "./types";
 
 export function createChallenge(input: {
   name: string;
@@ -37,4 +37,11 @@ export function leaveChallenge(id: string) {
 // todos os participantes, sem volta. Ver ChallengesService.remove (API).
 export function deleteChallenge(id: string) {
   return apiFetch<void>(`/challenges/${id}`, { method: "DELETE" });
+}
+
+// Prévia pública de um convite — única chamada do app que não exige sessão
+// (auth: false). É o que permite a página /join/[code] abrir para quem
+// ainda não tem conta.
+export function previewChallenge(joinCode: string) {
+  return apiFetch<ChallengePreview>(`/challenges/preview/${encodeURIComponent(joinCode)}`, { auth: false });
 }

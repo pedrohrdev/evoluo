@@ -1,16 +1,22 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/input";
 import { ApiError } from "@/lib/api/client";
 import { useAuth } from "@/lib/auth/auth-context";
 
-export default function SignupPage() {
+function SignupForm() {
   const { signUp } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  // Preserva o destino quando a pessoa chega por um link de convite
+  // (/join/CODE manda para cá com ?next=). Só caminhos internos: um `next`
+  // absoluto viraria redirecionamento aberto para fora do app.
+  const rawNext = searchParams.get("next");
+  const nextPath = rawNext && rawNext.startsWith("/") && !rawNext.startsWith("//") ? rawNext : "/onboarding";
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -28,7 +34,7 @@ export default function SignupPage() {
       if (needsEmailConfirmation) {
         setNotice("Conta criada! Confirme seu e-mail e depois entre por aqui.");
       } else {
-        router.replace("/onboarding");
+        router.replace(nextPath);
       }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Não foi possível criar a conta. Tente de novo.");
@@ -102,5 +108,15 @@ export default function SignupPage() {
         </p>
       </div>
     </div>
+  );
+}
+
+// useSearchParams() (para o ?next= do link de convite) exige um Suspense
+// boundary em volta — sem isso o build falha.
+export default function SignupPage() {
+  return (
+    <Suspense fallback={<div className="flex min-h-screen items-center justify-center" />}>
+      <SignupForm />
+    </Suspense>
   );
 }

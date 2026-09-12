@@ -80,6 +80,30 @@ export class GoalsService {
     return byParticipant;
   }
 
+  // Linha do tempo de versões de uma meta. Leitura pública, como as demais
+  // metas (CLAUDE.md seção 2 "Perfis").
+  //
+  // O padrão Goal/GoalVersion guarda toda a trilha de edições desde a etapa
+  // 5 e nenhuma tela jamais a mostrou: dava para baixar o alvo no meio do
+  // desafio e nenhum amigo tinha como perceber. Expor o histórico resolve
+  // pela transparência, sem proibir a edição — mudar de meta é legítimo,
+  // compromissos aparecem e ideias mudam.
+  async findVersions(goalId: string) {
+    const goal = await this.prisma.goal.findUnique({
+      where: { id: goalId },
+      select: { id: true },
+    });
+
+    if (!goal) {
+      throw new NotFoundException('Meta não encontrada.');
+    }
+
+    return this.prisma.goalVersion.findMany({
+      where: { goalId },
+      orderBy: { validFrom: 'desc' },
+    });
+  }
+
   // Fecha a versão vigente e abre uma nova — nunca UPDATE no conteúdo de
   // uma versão existente (histórico permanece intacto, CLAUDE.md seção 2
   // "Histórico" / docs/database-schema.md, função set_goal_version).

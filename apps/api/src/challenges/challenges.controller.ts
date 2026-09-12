@@ -9,11 +9,22 @@ import { JoinChallengeDto } from './dto/join-challenge.dto';
 
 // Desafios são públicos para leitura (CLAUDE.md seção 2 / arquitetura seção
 // 6) — por isso GET :id não checa dono, só exige estar autenticado.
-@UseGuards(SupabaseAuthGuard)
 @Controller('challenges')
 export class ChallengesController {
   constructor(private readonly challengesService: ChallengesService) {}
 
+  // ÚNICA rota sem SupabaseAuthGuard no app inteiro: o link de convite
+  // precisa abrir para quem ainda não tem conta. Devolve só o suficiente
+  // para decidir entrar (ver ChallengesService.previewByJoinCode) e tem
+  // limite próprio, já que é um alvo de enumeração de códigos sem o custo
+  // de manter uma sessão.
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Get('preview/:joinCode')
+  preview(@Param('joinCode') joinCode: string) {
+    return this.challengesService.previewByJoinCode(joinCode);
+  }
+
+  @UseGuards(SupabaseAuthGuard)
   @Post()
   create(@CurrentUser() user: AuthenticatedUser, @Body() dto: CreateChallengeDto) {
     return this.challengesService.create(user.id, dto);
@@ -25,11 +36,13 @@ export class ChallengesController {
   // mas é o único controle de acesso de entrada em desafio, então vale a
   // camada extra contra tentativa automatizada de adivinhação.
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @UseGuards(SupabaseAuthGuard)
   @Post('join')
   join(@CurrentUser() user: AuthenticatedUser, @Body() dto: JoinChallengeDto) {
     return this.challengesService.join(user.id, dto);
   }
 
+  @UseGuards(SupabaseAuthGuard)
   @Get(':id')
   findOne(@Param('id', ParseUUIDPipe) id: string) {
     return this.challengesService.findById(id);
@@ -37,6 +50,7 @@ export class ChallengesController {
 
   // Separado de GET :id de propósito: o desafio é leitura pública, o código
   // de convite não é — ver ChallengesService.findJoinCode.
+  @UseGuards(SupabaseAuthGuard)
   @Get(':id/join-code')
   findJoinCode(@CurrentUser() user: AuthenticatedUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.challengesService.findJoinCode(id, user.id);
@@ -45,6 +59,7 @@ export class ChallengesController {
   // Sair do desafio: marca o vínculo como inativo, preserva todo o histórico
   // (CLAUDE.md seção 2). Não confundir com DELETE :id, que destrói o desafio
   // inteiro para todos.
+  @UseGuards(SupabaseAuthGuard)
   @Post(':id/leave')
   @HttpCode(HttpStatus.OK)
   leave(@CurrentUser() user: AuthenticatedUser, @Param('id', ParseUUIDPipe) id: string) {
@@ -54,6 +69,7 @@ export class ChallengesController {
   // Hard-delete total (ChallengesService.remove) — só o criador, cascateia
   // para todos os participantes. Não confundir com "sair do desafio"
   // (challenge_participants.status), que preserva tudo.
+  @UseGuards(SupabaseAuthGuard)
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   remove(@CurrentUser() user: AuthenticatedUser, @Param('id', ParseUUIDPipe) id: string) {

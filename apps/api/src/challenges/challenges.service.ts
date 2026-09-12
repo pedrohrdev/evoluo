@@ -88,6 +88,34 @@ export class ChallengesService {
     return { challengeId: challenge.id, joinCode: challenge.joinCode };
   }
 
+  // Prévia PÚBLICA de um convite, pelo código — a única rota do app que não
+  // exige autenticação.
+  //
+  // Existe para o link de convite funcionar para quem ainda não tem conta:
+  // a pessoa abre /join/ABCD2345, vê no que está entrando e só então se
+  // cadastra. Devolve o mínimo (nome, duração, datas, quantos já entraram)
+  // e NUNCA o id do desafio nem a lista de participantes — quem tem o
+  // código já poderia entrar de qualquer forma, mas não há motivo para
+  // vazar mais do que o necessário para a decisão de entrar.
+  async previewByJoinCode(joinCode: string) {
+    const normalized = joinCode.trim().toUpperCase();
+
+    const challenge = await this.prisma.challenge.findUnique({
+      where: { joinCode: normalized },
+      select: { name: true, description: true, durationDays: true, startDate: true, endDate: true },
+    });
+
+    if (!challenge) {
+      throw new NotFoundException('Nenhum desafio encontrado para este código.');
+    }
+
+    const participantCount = await this.prisma.challengeParticipant.count({
+      where: { challenge: { joinCode: normalized }, status: ParticipantStatus.active },
+    });
+
+    return { ...challenge, participantCount };
+  }
+
   // Basta ter o join_code para entrar — sem aprovação do criador (CLAUDE.md
   // seção 2, "Outras regras já confirmadas").
   async join(userId: string, dto: JoinChallengeDto) {

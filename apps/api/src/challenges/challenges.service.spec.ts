@@ -10,6 +10,7 @@ describe('ChallengesService', () => {
   let participantCreate: jest.Mock;
   let participantFindUnique: jest.Mock;
   let participantUpdate: jest.Mock;
+  let participantCount: jest.Mock;
   let executeRaw: jest.Mock;
   let transaction: jest.Mock;
   let prisma: PrismaService;
@@ -22,6 +23,7 @@ describe('ChallengesService', () => {
     participantCreate = jest.fn();
     participantFindUnique = jest.fn();
     participantUpdate = jest.fn();
+    participantCount = jest.fn();
     executeRaw = jest.fn().mockResolvedValue(undefined);
 
     // $transaction aqui só encaminha o callback para um "tx" que reusa os
@@ -41,6 +43,7 @@ describe('ChallengesService', () => {
         create: participantCreate,
         findUnique: participantFindUnique,
         update: participantUpdate,
+        count: participantCount,
       },
       $transaction: transaction,
     } as unknown as PrismaService;
@@ -248,6 +251,54 @@ describe('ChallengesService', () => {
 
       await expect(service.leave('c1', 'u1')).rejects.toThrow(ConflictException);
       expect(participantUpdate).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('previewByJoinCode', () => {
+    it('normalizes the code and returns only what the invite page needs', async () => {
+      challengeFindUnique.mockResolvedValue({
+        name: 'Verão 2026',
+        description: null,
+        durationDays: 30,
+        startDate: new Date('2026-09-01'),
+        endDate: new Date('2026-09-30'),
+      });
+      participantCount.mockResolvedValue(4);
+
+      const result = await service.previewByJoinCode('  abcd2345 ');
+
+      expect(challengeFindUnique).toHaveBeenCalledWith({
+        where: { joinCode: 'ABCD2345' },
+        select: { name: true, description: true, durationDays: true, startDate: true, endDate: true },
+      });
+      expect(result).toMatchObject({ name: 'Verão 2026', participantCount: 4 });
+      // Rota pública: nunca vaza o id do desafio nem o próprio código.
+      expect(result).not.toHaveProperty('id');
+      expect(result).not.toHaveProperty('joinCode');
+    });
+
+    it('counts only active participants', async () => {
+      challengeFindUnique.mockResolvedValue({
+        name: 'X',
+        description: null,
+        durationDays: 30,
+        startDate: new Date('2026-09-01'),
+        endDate: new Date('2026-09-30'),
+      });
+      participantCount.mockResolvedValue(1);
+
+      await service.previewByJoinCode('ABCD2345');
+
+      expect(participantCount).toHaveBeenCalledWith({
+        where: { challenge: { joinCode: 'ABCD2345' }, status: ParticipantStatus.active },
+      });
+    });
+
+    it('throws NotFoundException for an unknown code', async () => {
+      challengeFindUnique.mockResolvedValue(null);
+
+      await expect(service.previewByJoinCode('ZZZZ9999')).rejects.toThrow(NotFoundException);
+      expect(participantCount).not.toHaveBeenCalled();
     });
   });
 });
