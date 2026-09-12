@@ -11,6 +11,7 @@ import { CheckInModal } from "@/components/goals/check-in-modal";
 import { GoalSummaryRow } from "@/components/goals/goal-summary-row";
 import { PeriodGoalModal } from "@/components/goals/period-goal-modal";
 import { PodiumCard } from "@/components/ranking/podium-card";
+import { PushToggle } from "@/components/settings/push-toggle";
 import { RankingList } from "@/components/ranking/ranking-list";
 import { StreakFlame } from "@/components/streak/streak-flame";
 import { Badge } from "@/components/ui/badge";
@@ -172,6 +173,8 @@ export default function DashboardPage() {
       </Surface>
 
       {rankingQuery.data && rankingQuery.data.length > 0 ? <PodiumCard entries={rankingQuery.data} /> : null}
+
+      {hasStarted && !checkedInToday ? <PushToggle /> : null}
 
       <section>
         <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">

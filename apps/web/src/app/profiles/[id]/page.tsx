@@ -7,6 +7,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 import { Avatar } from "@/components/profile/avatar";
 import { EditProfileModal } from "@/components/profile/edit-profile-modal";
+import { PushSettingRow } from "@/components/settings/push-toggle";
 import { HeroStat } from "@/components/dashboard/hero-stat";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -92,6 +93,12 @@ export default function ProfilePage() {
           </span>
           <ArrowRight className="size-4 shrink-0 text-ink-faint" aria-hidden />
         </Link>
+      ) : null}
+
+      {isOwn ? (
+        <div className="mt-4">
+          <PushSettingRow />
+        </div>
       ) : null}
 
       <section className="mt-8">
