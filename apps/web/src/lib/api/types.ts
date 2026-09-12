@@ -113,6 +113,10 @@ export interface ProfileChallengeParticipation {
   longestStreak: number;
   totalPoints: number;
   totalDaysCompleted: number;
+  // Data (sem hora) do check-in diário mais recente, ou null se nunca fez
+  // nenhum. Usado só pra escolher qual desafio mostrar de cara quando a
+  // pessoa está em mais de um — o mais recentemente ativo.
+  lastCheckInDate: string | null;
   goals: Goal[];
 }
 

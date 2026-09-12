@@ -78,7 +78,33 @@ function ParticipationGate({
         {profile.displayName}
       </button>
 
-      <h1 className="mb-1 font-display text-xl font-semibold text-ink">{participation.challengeName}</h1>
+      <h1 className="mb-1 font-display text-xl font-semibold text-ink">Metas de {profile.displayName}</h1>
+      <p className="mb-4 text-sm text-ink-muted">{participation.challengeName}</p>
+
+      {/* Trocar de desafio sem passar pela lista do perfil (pedido do
+          usuário): só aparece quando a pessoa participa de mais de um. Link
+          (push) mesmo — é uma navegação lateral, não um "voltar", então
+          continua empilhando normalmente pro botão de voltar acima
+          funcionar em qualquer um deles. */}
+      {profile.challenges.length > 1 ? (
+        <div className="mb-4 flex flex-wrap gap-1.5" role="tablist" aria-label="Desafios">
+          {profile.challenges.map((c) => (
+            <Link
+              key={c.participantId}
+              href={`/profiles/${profileId}/challenges/${c.challengeId}`}
+              aria-current={c.challengeId === challengeId ? "page" : undefined}
+              className={cn(
+                "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                c.challengeId === challengeId
+                  ? "border-accent bg-accent-soft text-accent-strong"
+                  : "border-line bg-surface-2 text-ink-muted hover:border-line-strong hover:text-ink",
+              )}
+            >
+              {c.challengeName}
+            </Link>
+          ))}
+        </div>
+      ) : null}
 
       <div className="mb-6 flex items-center gap-1 border-b border-line">
         {TABS.map((tab) => {

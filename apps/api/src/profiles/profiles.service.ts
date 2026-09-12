@@ -52,11 +52,27 @@ export class ProfilesService {
       orderBy: { joinedAt: 'desc' },
     });
 
+    const participantIds = participations.map((participant) => participant.id);
+
     // Uma única query para as metas de todas as participações (nunca uma
     // por desafio) — evita um N+1 quando o usuário está em vários desafios
-    // (etapa 18 "Performance").
-    const goalsByParticipant = await this.goalsService.findAllForParticipants(
-      participations.map((participant) => participant.id),
+    // (etapa 18 "Performance"). O mesmo vale para o último check-in: uma
+    // única agregação (groupBy) em vez de uma consulta por participação —
+    // usado pelo frontend pra escolher qual desafio mostrar de cara quando
+    // a pessoa está em mais de um (o mais recentemente ativo).
+    const [goalsByParticipant, lastCheckIns] = await Promise.all([
+      this.goalsService.findAllForParticipants(participantIds),
+      participantIds.length > 0
+        ? this.prisma.dailyRecord.groupBy({
+            by: ['challengeParticipantId'],
+            where: { challengeParticipantId: { in: participantIds } },
+            _max: { recordDate: true },
+          })
+        : Promise.resolve([]),
+    ]);
+
+    const lastCheckInByParticipant = new Map(
+      lastCheckIns.map((row) => [row.challengeParticipantId, row._max.recordDate]),
     );
 
     const challenges = participations.map((participant) => ({
@@ -73,6 +89,7 @@ export class ProfilesService {
       longestStreak: participant.longestStreak,
       totalPoints: participant.totalPoints,
       totalDaysCompleted: participant.totalDaysCompleted,
+      lastCheckInDate: lastCheckInByParticipant.get(participant.id) ?? null,
       goals: goalsByParticipant.get(participant.id) ?? [],
     }));
 
