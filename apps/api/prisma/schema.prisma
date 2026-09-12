@@ -57,6 +57,7 @@ model Challenge {
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
   participants ChallengeParticipant[]
+  specialGoals SpecialGoal[]
 
   @@map("challenges")
 }
@@ -77,14 +78,16 @@ model ChallengeParticipant {
   totalDaysCompleted Int               @default(0) @map("total_days_completed")
   createdAt          DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  challenge        Challenge         @relation(fields: [challengeId], references: [id], onDelete: Cascade)
-  goals            Goal[]
-  dailyRecords     DailyRecord[]
-  weeklyRecords    WeeklyRecord[]
-  monthlyRecords   MonthlyRecord[]
-  challengeRecords ChallengeRecord[]
-  pointsLedger     PointsLedger[]
-  dayResults       DayResult[]
+  challenge            Challenge         @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  goals                Goal[]
+  dailyRecords         DailyRecord[]
+  weeklyRecords        WeeklyRecord[]
+  monthlyRecords       MonthlyRecord[]
+  challengeRecords     ChallengeRecord[]
+  pointsLedger         PointsLedger[]
+  dayResults           DayResult[]
+  specialGoalsSent     SpecialGoal[]     @relation("SpecialGoalsSent")
+  specialGoalsReceived SpecialGoal[]     @relation("SpecialGoalsReceived")
 
   @@unique([challengeId, userId])
   @@map("challenge_participants")
@@ -341,4 +344,41 @@ model DayResult {
 
   @@unique([challengeParticipantId, resultDate])
   @@map("day_results")
+}
+
+// Status de uma meta especial (ver enum `special_goal_status` em
+// supabase/migrations/20260911100000_special_goals.sql).
+enum SpecialGoalStatus {
+  pending
+  completed
+  cancelled
+
+  @@map("special_goal_status")
+}
+
+// Tarefa avulsa que um participante atribui a outro do mesmo desafio —
+// decisão de negócio confirmada com o usuário, fora do modelo original de
+// metas (não é period_type nem tem GoalVersion). Aplicada direto, sem
+// aceite; sempre sim/não; sem prazo; puramente social — nunca gera pontos
+// nem afeta streak/ranking (CLAUDE.md seção 2 "Outras regras já
+// confirmadas"). Sem edição: só transita pending -> completed (pelo alvo,
+// SpecialGoalsService.complete) ou pending -> cancelled (por quem criou,
+// SpecialGoalsService.cancel) — o trigger
+// enforce_special_goal_transition bloqueia qualquer outra mudança.
+model SpecialGoal {
+  id                String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  challengeId       String            @map("challenge_id") @db.Uuid
+  fromParticipantId String            @map("from_participant_id") @db.Uuid
+  toParticipantId   String            @map("to_participant_id") @db.Uuid
+  title             String
+  status            SpecialGoalStatus @default(pending)
+  completedAt       DateTime?         @map("completed_at") @db.Timestamptz(6)
+  cancelledAt       DateTime?         @map("cancelled_at") @db.Timestamptz(6)
+  createdAt         DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  challenge       Challenge            @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  fromParticipant ChallengeParticipant @relation("SpecialGoalsSent", fields: [fromParticipantId], references: [id], onDelete: Cascade)
+  toParticipant   ChallengeParticipant @relation("SpecialGoalsReceived", fields: [toParticipantId], references: [id], onDelete: Cascade)
+
+  @@map("special_goals")
 }

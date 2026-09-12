@@ -22,6 +22,25 @@ export const Input = forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTML
 );
 Input.displayName = "Input";
 
+export const Select = forwardRef<HTMLSelectElement, React.SelectHTMLAttributes<HTMLSelectElement>>(
+  ({ className, ...props }, ref) => {
+    return (
+      <select
+        ref={ref}
+        className={cn(
+          "h-10 w-full rounded-sm border border-line bg-surface-2 px-3 text-sm text-ink",
+          "transition-colors duration-150 ease-out",
+          "hover:border-line-strong focus:border-accent",
+          "disabled:opacity-40",
+          className,
+        )}
+        {...props}
+      />
+    );
+  },
+);
+Select.displayName = "Select";
+
 export const Field = ({
   label,
   htmlFor,

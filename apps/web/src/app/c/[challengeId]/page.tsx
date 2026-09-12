@@ -7,6 +7,7 @@ import { useState } from "react";
 import { HeroStat } from "@/components/dashboard/hero-stat";
 import { CheckInModal } from "@/components/goals/check-in-modal";
 import { GoalSummaryRow } from "@/components/goals/goal-summary-row";
+import { PodiumCard } from "@/components/ranking/podium-card";
 import { RankingList } from "@/components/ranking/ranking-list";
 import { StreakFlame } from "@/components/streak/streak-flame";
 import { Badge } from "@/components/ui/badge";
@@ -150,6 +151,8 @@ export default function DashboardPage() {
           }
         />
       </Surface>
+
+      {rankingQuery.data && rankingQuery.data.length > 0 ? <PodiumCard entries={rankingQuery.data} /> : null}
 
       <section>
         <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">

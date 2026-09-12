@@ -68,3 +68,10 @@ Uma etapa só é marcada como `[x]` depois de implementada, testada, integrada a
 
 - [x] **21. Polimento final**
   Ícone do app substituído pelo padrão do Next.js (gerado localmente via `app/icon.tsx`, sem asset externo, mesma marca do wordmark). Página 404 (`not-found.tsx`) personalizada com a identidade visual — antes caía na página genérica do Next.js. Revisão de conteúdo encontrou e corrigiu uma inconsistência real: o mesmo status ("participante saiu do desafio") tinha dois textos diferentes em duas telas (onboarding e perfil público); unificado em "Você saiu" — e corrigido para variar corretamente entre primeira e terceira pessoa no perfil público, que pode mostrar o desafio de qualquer usuário, não só o do próprio visitante. Revisão de mensagens de erro do backend (todas as ~35 mensagens de exceção): tom e clareza já consistentes, nenhuma mudança necessária.
+
+- [x] **22. Metas especiais entre participantes**
+  Nova decisão de negócio, confirmada com o usuário (ver CLAUDE.md seção 2 "Outras regras já confirmadas") e fora do modelo original de metas das etapas 1-21: um participante pode atribuir, a qualquer momento, uma meta avulsa (sempre sim/não, sem prazo fixo) a outro participante do mesmo desafio. Aplicada direto, sem aceite; puramente social — nunca gera pontos, nunca afeta streak/ranking; pública dentro do desafio, como as demais metas. Quem criou pode cancelar enquanto pendente; sem limite de metas especiais simultâneas.
+
+  Backend: tabela `special_goals` nova (migration `20260911100000_special_goals.sql`, com trigger de mesmo-desafio e trigger de imutabilidade de transição de status, RLS com policies de select público/insert própria/complete pelo alvo/cancel por quem criou), módulo `SpecialGoalsModule` (create/list/complete/cancel), 10 testes unitários novos.
+
+  Frontend: nova aba "Especiais" no desafio (`/c/[challengeId]/special-goals`) para criar, listar e concluir/cancelar; e, à parte (pedido separado do usuário na mesma etapa): card compacto de pódio (1º-3º) no painel do desafio, logo abaixo dos stats principais e acima de "Hoje" (foco em mobile).

@@ -1,6 +1,6 @@
 "use client";
 
-import { BarChart3, LayoutDashboard, ListChecks, Trophy } from "lucide-react";
+import { BarChart3, Gift, LayoutDashboard, ListChecks, Trophy } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/cn";
@@ -10,6 +10,7 @@ function useNavItems(challengeId: string) {
   return [
     { href: base, label: "Painel", icon: LayoutDashboard, exact: true },
     { href: `${base}/ranking`, label: "Ranking", icon: Trophy },
+    { href: `${base}/special-goals`, label: "Especiais", icon: Gift },
     { href: `${base}/history`, label: "Histórico", icon: ListChecks },
     { href: `${base}/analytics`, label: "Análises", icon: BarChart3 },
   ];
