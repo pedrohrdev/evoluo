@@ -2,8 +2,8 @@
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Plus, Users } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/feedback";
@@ -14,13 +14,25 @@ import { StreakFlame } from "@/components/streak/streak-flame";
 import { getProfile, profileQueryKey } from "@/lib/api/profiles";
 import { useAuth } from "@/lib/auth/auth-context";
 import { useRequireAuth } from "@/lib/auth/use-require-auth";
+import { pickDefaultChallenge } from "@/lib/challenge/pick-default-challenge";
 import { daysBetween } from "@/lib/format/format";
 import { useSound } from "@/lib/sounds/sound-context";
 
+// useSearchParams() (pro escape hatch ?all=1) exige um Suspense boundary
+// em volta — sem isso o build falha ("missing suspense boundary").
 export default function OnboardingPage() {
+  return (
+    <Suspense fallback={<LoadingState label="Carregando…" />}>
+      <OnboardingContent />
+    </Suspense>
+  );
+}
+
+function OnboardingContent() {
   const { isReady } = useRequireAuth();
   const { session, signOut } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const { play } = useSound();
   const [createOpen, setCreateOpen] = useState(false);
@@ -32,6 +44,19 @@ export default function OnboardingPage() {
     enabled: isReady && !!session,
   });
 
+  // Padrão pedido pelo usuário: já entrar direto no painel do desafio mais
+  // ativo, sem precisar clicar nele nesta lista. `?all=1` (link "Meus
+  // desafios" no menu do usuário) pula esse redirect pra deixar trocar de
+  // desafio ou criar/entrar em outro. router.replace (não push) pra essa
+  // página nunca ficar presa no histórico entre o painel e o login.
+  const showAll = searchParams.get("all") === "1";
+  useEffect(() => {
+    if (!showAll && profile && profile.challenges.length > 0) {
+      const target = pickDefaultChallenge(profile.challenges);
+      if (target) router.replace(`/c/${target.challengeId}`);
+    }
+  }, [showAll, profile, router]);
+
   function handleEnteredChallenge(challengeId: string) {
     play("joined");
     void queryClient.invalidateQueries({ queryKey: profileQueryKey(session?.userId ?? "") });
@@ -42,6 +67,7 @@ export default function OnboardingPage() {
   }
 
   if (!isReady) return null;
+  if (!showAll && profile && profile.challenges.length > 0) return <LoadingState label="Carregando seu painel…" />;
 
   return (
     <div className="mx-auto flex min-h-screen max-w-3xl flex-col px-4 py-10 sm:px-6">
