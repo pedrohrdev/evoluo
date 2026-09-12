@@ -386,3 +386,19 @@ model SpecialGoal {
 
   @@map("special_goals")
 }
+
+// Uma inscrição de Web Push por navegador/dispositivo (etapa 28). Ver
+// supabase/migrations/20260912110000_push_subscriptions.sql.
+model PushSubscription {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId     String    @map("user_id") @db.Uuid
+  // Chave natural: a URL que o serviço de push do navegador devolve.
+  endpoint   String    @unique
+  p256dh     String
+  auth       String
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  lastUsedAt DateTime? @map("last_used_at") @db.Timestamptz(6)
+
+  @@index([userId])
+  @@map("push_subscriptions")
+}
