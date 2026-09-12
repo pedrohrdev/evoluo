@@ -21,7 +21,7 @@ import { getStreak } from "@/lib/api/streak";
 import type { GoalPeriod, RecordEntry, TodayState } from "@/lib/api/types";
 import { useChallenge } from "@/lib/challenge/challenge-context";
 import { useStreakFeedback } from "@/lib/challenge/use-streak-feedback";
-import { daysBetween } from "@/lib/format/format";
+import { daysBetween, formatDate } from "@/lib/format/format";
 
 export default function DashboardPage() {
   const { participation } = useChallenge();
@@ -88,6 +88,14 @@ export default function DashboardPage() {
   // está decidido, então o botão de check-in some até amanhã.
   const checkedInToday = streak.today?.closed ?? false;
 
+  // Desafio pode ser criado com start_date no futuro (ex.: combinar com os
+  // amigos de começar só na segunda) — RecordsService já rejeita qualquer
+  // registro/check-in antes disso (backend); aqui é só refletir esse
+  // estado na UI em vez de mostrar "Dia 1" e um botão de check-in que
+  // falharia ao ser clicado.
+  const daysUntilStart = daysBetween(new Date().toISOString(), participation.startDate);
+  const hasStarted = daysUntilStart <= 0;
+
   const dayNumber = Math.min(
     participation.durationDays,
     Math.max(1, daysBetween(participation.startDate, new Date().toISOString()) + 1),
@@ -127,7 +135,11 @@ export default function DashboardPage() {
       <Surface className="grid grid-cols-2 gap-6 p-6 sm:grid-cols-4">
         <HeroStat label="Streak atual" value={<StreakFlame value={streak.currentStreak} size="lg" />} hint={`recorde: ${streak.longestStreak}`} />
         <HeroStat label="Pontos" value={participation.totalPoints} hint="total no desafio" />
-        <HeroStat label="Dia do desafio" value={`${dayNumber}/${participation.durationDays}`} />
+        <HeroStat
+          label={hasStarted ? "Dia do desafio" : "Começa em"}
+          value={hasStarted ? `${dayNumber}/${participation.durationDays}` : `${daysUntilStart}d`}
+          hint={hasStarted ? undefined : formatDate(participation.startDate)}
+        />
         <HeroStat
           label="Ranking"
           value={ownPosition ? `${ownPosition}º` : "—"}
@@ -143,7 +155,13 @@ export default function DashboardPage() {
         <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
           <div>
             <h2 className="font-display text-lg font-semibold text-ink">Hoje</h2>
-            <p className="text-sm text-ink-muted">{completedToday}/3 metas diárias concluídas</p>
+            <p className="text-sm text-ink-muted">
+              {!hasStarted
+                ? daysUntilStart === 1
+                  ? "Começa amanhã"
+                  : `Começa em ${daysUntilStart} dias`
+                : `${completedToday}/3 metas diárias concluídas`}
+            </p>
           </div>
           {!dailyConfigured ? (
             <Link
@@ -153,6 +171,10 @@ export default function DashboardPage() {
               <Settings2 className="size-4" aria-hidden />
               Configurar metas diárias
             </Link>
+          ) : !hasStarted ? (
+            <Badge tone="neutral" className="shrink-0 sm:self-start">
+              Ainda não começou
+            </Badge>
           ) : checkedInToday ? (
             <Badge tone="success" className="shrink-0 sm:self-start">
               <ClipboardCheck className="size-3.5" aria-hidden />
@@ -165,11 +187,18 @@ export default function DashboardPage() {
             </Button>
           )}
         </div>
-        <ProgressBar value={(completedToday / 3) * 100} tone={completedToday === 3 ? "success" : "accent"} className="mb-4" />
+        {hasStarted ? (
+          <ProgressBar value={(completedToday / 3) * 100} tone={completedToday === 3 ? "success" : "accent"} className="mb-4" />
+        ) : null}
 
         {!dailyConfigured ? (
           <Surface className="p-5 text-sm text-ink-muted">
             Configure as 3 metas diárias obrigatórias para começar a acompanhar seu streak.
+          </Surface>
+        ) : !hasStarted ? (
+          <Surface className="p-5 text-sm text-ink-muted">
+            Esse desafio começa {daysUntilStart === 1 ? "amanhã" : `em ${daysUntilStart} dias`}, no dia{" "}
+            {formatDate(participation.startDate)} — o check-in libera a partir daí. Suas metas já estão configuradas.
           </Surface>
         ) : (
           <div className="flex flex-col gap-2">
@@ -219,7 +248,7 @@ export default function DashboardPage() {
         </section>
       </div>
 
-      {dailyConfigured && !checkedInToday ? (
+      {dailyConfigured && hasStarted && !checkedInToday ? (
         <CheckInModal
           open={checkInOpen}
           onOpenChange={setCheckInOpen}

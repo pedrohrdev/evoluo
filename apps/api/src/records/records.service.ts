@@ -34,7 +34,7 @@ export class RecordsService {
   async checkInDaily(participantId: string, userId: string, dto: CheckInDailyDto) {
     const participant = await this.prisma.challengeParticipant.findUnique({
       where: { id: participantId },
-      select: { id: true, userId: true, status: true },
+      select: { id: true, userId: true, status: true, challenge: { select: { startDate: true } } },
     });
 
     if (!participant) {
@@ -46,6 +46,7 @@ export class RecordsService {
     if (participant.status !== ParticipantStatus.active) {
       throw new ForbiddenException('Não é possível fazer check-in de um desafio que você já deixou.');
     }
+    this.assertChallengeStarted(participant.challenge.startDate);
 
     const today = new Date(todayInSaoPaulo());
 
@@ -243,6 +244,8 @@ export class RecordsService {
       throw new ForbiddenException('Não é possível registrar metas de um desafio que você já deixou.');
     }
 
+    this.assertChallengeStarted(goal.challengeParticipant.challenge.startDate);
+
     const currentVersion = goal.versions[0];
     if (!currentVersion) {
       throw new ConflictException('Esta meta não tem uma versão vigente configurada.');
@@ -341,6 +344,18 @@ export class RecordsService {
       streakAfter: dayResult.streakAfter,
       records: recordsByDate.get(dayResult.resultDate.getTime()) ?? [],
     }));
+  }
+
+  // Um desafio pode ser programado pra começar numa data futura (ex.: criar
+  // na sexta, combinar de todo mundo começar na segunda) — nada registrável
+  // deve valer antes disso: sem check-in, sem streak, sem pontos. A janela
+  // "hoje" dos triggers do banco (enforce_daily_record_window etc.) não
+  // sabe disso — só compara record_date contra a data atual, nunca contra
+  // challenges.start_date — então essa checagem só existe aqui.
+  private assertChallengeStarted(startDate: Date): void {
+    if (todayInSaoPaulo() < toDateString(startDate)) {
+      throw new ForbiddenException('Este desafio ainda não começou.');
+    }
   }
 
   private assertActualMatchesKind(kind: GoalKind, dto: RecordDailyGoalDto | RecordPeriodGoalDto): void {

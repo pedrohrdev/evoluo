@@ -57,7 +57,11 @@ export function CreateChallengeModal({
         <Field label="Duração" htmlFor="challenge-duration">
           <DurationPicker value={durationDays} onChange={setDurationDays} />
         </Field>
-        <Field label="Data de início" htmlFor="challenge-start">
+        <Field
+          label="Data de início"
+          htmlFor="challenge-start"
+          hint="Pode ser uma data futura — combine com os amigos e todo mundo começa junto naquele dia."
+        >
           <Input id="challenge-start" type="date" required value={startDate} onChange={(e) => setStartDate(e.target.value)} />
         </Field>
         {error ? (

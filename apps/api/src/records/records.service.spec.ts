@@ -27,7 +27,12 @@ describe('RecordsService', () => {
   let prisma: PrismaService;
   let service: RecordsService;
 
-  const activeParticipant = { id: 'p1', userId: 'u1', status: ParticipantStatus.active };
+  const activeParticipant = {
+    id: 'p1',
+    userId: 'u1',
+    status: ParticipantStatus.active,
+    challenge: { startDate: new Date('2020-01-01') },
+  };
   const openHoursVersion = {
     id: 'v1',
     kind: GoalKind.hours,
@@ -96,7 +101,12 @@ describe('RecordsService', () => {
     };
 
     beforeEach(() => {
-      participantFindUnique.mockResolvedValue({ id: 'p1', userId: 'u1', status: ParticipantStatus.active });
+      participantFindUnique.mockResolvedValue({
+        id: 'p1',
+        userId: 'u1',
+        status: ParticipantStatus.active,
+        challenge: { startDate: new Date('2020-01-01') },
+      });
       dayResultFindUnique.mockResolvedValue(null);
       dailyRecordFindMany.mockResolvedValue([]);
       weeklyRecordFindMany.mockResolvedValue([]);
@@ -169,15 +179,39 @@ describe('RecordsService', () => {
     });
 
     it('throws ForbiddenException when the participant belongs to another user', async () => {
-      participantFindUnique.mockResolvedValue({ id: 'p1', userId: 'someone-else', status: ParticipantStatus.active });
+      participantFindUnique.mockResolvedValue({
+        id: 'p1',
+        userId: 'someone-else',
+        status: ParticipantStatus.active,
+        challenge: { startDate: new Date('2020-01-01') },
+      });
 
       await expect(service.checkInDaily('p1', 'u1', { records: [] })).rejects.toThrow(ForbiddenException);
     });
 
     it('throws ForbiddenException when the participant already left the challenge', async () => {
-      participantFindUnique.mockResolvedValue({ id: 'p1', userId: 'u1', status: ParticipantStatus.inactive });
+      participantFindUnique.mockResolvedValue({
+        id: 'p1',
+        userId: 'u1',
+        status: ParticipantStatus.inactive,
+        challenge: { startDate: new Date('2020-01-01') },
+      });
 
       await expect(service.checkInDaily('p1', 'u1', { records: [] })).rejects.toThrow(ForbiddenException);
+    });
+
+    it('throws ForbiddenException when the challenge is scheduled to start in the future', async () => {
+      const tomorrow = new Date(`${todayInSaoPaulo()}T00:00:00Z`);
+      tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+      participantFindUnique.mockResolvedValue({
+        id: 'p1',
+        userId: 'u1',
+        status: ParticipantStatus.active,
+        challenge: { startDate: tomorrow },
+      });
+
+      await expect(service.checkInDaily('p1', 'u1', { records: [] })).rejects.toThrow(ForbiddenException);
+      expect(dayResultFindUnique).not.toHaveBeenCalled();
     });
 
     it('throws ForbiddenException when a goal in the payload belongs to a different participant', async () => {
@@ -293,6 +327,25 @@ describe('RecordsService', () => {
       await expect(service.recordCurrentWeek('g1', 'u1', { actualValue: 1 })).rejects.toThrow(BadRequestException);
       expect(weeklyRecordUpsert).not.toHaveBeenCalled();
     });
+
+    // Um desafio pode ser criado com start_date no futuro (ex.: combinado
+    // pra começar numa segunda-feira específica) — nada é registrável antes
+    // disso, nem metas semanais/mensais/de duração (resolveOpenGoalVersion
+    // é compartilhado por todos os períodos, então testar aqui cobre os
+    // outros também).
+    it('throws ForbiddenException when the challenge is scheduled to start in the future', async () => {
+      const tomorrow = new Date(`${todayInSaoPaulo()}T00:00:00Z`);
+      tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+      goalFindUnique.mockResolvedValue({
+        id: 'g1',
+        periodType: GoalPeriod.weekly,
+        challengeParticipant: { ...activeParticipant, challenge: { startDate: tomorrow } },
+        versions: [openHoursVersion],
+      });
+
+      await expect(service.recordCurrentWeek('g1', 'u1', { actualValue: 1 })).rejects.toThrow(ForbiddenException);
+      expect(weeklyRecordUpsert).not.toHaveBeenCalled();
+    });
   });
 
   describe('recordCurrentMonth', () => {
@@ -354,7 +407,7 @@ describe('RecordsService', () => {
         challengeParticipant: {
           ...activeParticipant,
           joinedAt,
-          challenge: { endDate: challengeEndDate },
+          challenge: { startDate: activeParticipant.challenge.startDate, endDate: challengeEndDate },
         },
         versions: [openHoursVersion],
       });
@@ -397,7 +450,7 @@ describe('RecordsService', () => {
         id: 'g1',
         periodType: GoalPeriod.challenge,
         challengeParticipantId: 'p1',
-        challengeParticipant: { ...activeParticipant, joinedAt, challenge: { endDate: challengeEndDate } },
+        challengeParticipant: { ...activeParticipant, joinedAt, challenge: { startDate: activeParticipant.challenge.startDate, endDate: challengeEndDate } },
         versions: [openHoursVersion],
       });
       challengeRecordUpsert.mockResolvedValue({});
@@ -420,7 +473,7 @@ describe('RecordsService', () => {
       goalFindUnique.mockResolvedValue({
         id: 'g1',
         periodType: GoalPeriod.challenge,
-        challengeParticipant: { ...activeParticipant, joinedAt, challenge: { endDate: challengeEndDate } },
+        challengeParticipant: { ...activeParticipant, joinedAt, challenge: { startDate: activeParticipant.challenge.startDate, endDate: challengeEndDate } },
         versions: [openHoursVersion],
       });
 
