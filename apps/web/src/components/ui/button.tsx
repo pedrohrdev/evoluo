@@ -5,7 +5,9 @@ import { Loader2 } from "lucide-react";
 import { forwardRef } from "react";
 import { cn } from "@/lib/cn";
 
-const buttonStyles = cva(
+// Exportado para um <Link> poder parecer um botão sem o Button precisar de
+// asChild/Slot — usado na página pública de convite.
+export const buttonStyles = cva(
   "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-sm font-medium transition-colors duration-150 ease-out disabled:pointer-events-none disabled:opacity-40",
   {
     variants: {

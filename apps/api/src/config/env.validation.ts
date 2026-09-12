@@ -26,6 +26,25 @@ class EnvironmentVariables {
   @IsNotEmpty()
   PASSWORD_RESET_REDIRECT_URL?: string;
 
+  // Lembrete diário de check-in. Sem elas o serviço apenas registra quantos
+  // lembretes seriam enviados, sem falhar — ver RemindersService.
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  RESEND_API_KEY?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  REMINDER_FROM_EMAIL?: string;
+
+  // Segredo compartilhado com o agendador que chama POST /reminders/daily.
+  // Sem ele a rota recusa tudo (fechada por padrão).
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  REMINDERS_CRON_SECRET?: string;
+
   @IsOptional()
   @IsInt()
   @Min(1)

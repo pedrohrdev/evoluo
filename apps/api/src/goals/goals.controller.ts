@@ -27,6 +27,11 @@ export class GoalsController {
     return this.goalsService.findAllForParticipant(participantId);
   }
 
+  @Get('goals/:goalId/versions')
+  findVersions(@Param('goalId', ParseUUIDPipe) goalId: string) {
+    return this.goalsService.findVersions(goalId);
+  }
+
   @Patch('goals/:goalId')
   update(
     @CurrentUser() user: AuthenticatedUser,

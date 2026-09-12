@@ -22,6 +22,17 @@ export interface Challenge {
   createdAt: string;
 }
 
+// O que um convite mostra antes de a pessoa entrar (ou até se cadastrar).
+// Sem o id do desafio e sem a lista de participantes de propósito.
+export interface ChallengePreview {
+  name: string;
+  description: string | null;
+  durationDays: number;
+  startDate: string;
+  endDate: string;
+  participantCount: number;
+}
+
 export interface ChallengeJoinCode {
   challengeId: string;
   joinCode: string;

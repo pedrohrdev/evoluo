@@ -5,6 +5,7 @@ import type { Goal, RecordEntry } from "@/lib/api/types";
 import { cn } from "@/lib/cn";
 import { IMPORTANCE_LABEL } from "@/lib/domain/labels";
 import { formatValueForKind } from "@/lib/format/format";
+import { GoalHistoryBadge } from "./goal-history-badge";
 
 type GoalState = "not-started" | "completed" | "incomplete";
 
@@ -32,6 +33,11 @@ export function GoalSummaryRow({
 
   const state = stateOf(record);
 
+  // A primeira versão nasce na mesma transação da meta (GoalsService.create),
+  // então uma vigência que começou bem depois da criação só pode ter vindo
+  // de uma edição. A folga de 5s absorve a diferença entre os dois inserts.
+  const wasEdited = new Date(version.validFrom).getTime() - new Date(goal.createdAt).getTime() > 5_000;
+
   return (
     <Surface
       className={cn(
@@ -54,6 +60,7 @@ export function GoalSummaryRow({
         </div>
         <div className="mt-1 flex flex-wrap items-center gap-1.5 pl-6 text-xs text-ink-muted">
           <Badge tone="neutral">{IMPORTANCE_LABEL[version.importance]}</Badge>
+          {wasEdited ? <GoalHistoryBadge goalId={goal.id} createdAt={version.validFrom} /> : null}
           {version.kind !== "boolean" ? (
             <span>
               alvo: {formatValueForKind(version.kind, version.targetValue)}

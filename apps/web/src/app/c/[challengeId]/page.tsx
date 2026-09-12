@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowRight, ClipboardCheck, Settings2, Trophy } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
+import { ChallengeResult } from "@/components/challenge/challenge-result";
 import { HeroStat } from "@/components/dashboard/hero-stat";
 import { CheckInModal } from "@/components/goals/check-in-modal";
 import { GoalSummaryRow } from "@/components/goals/goal-summary-row";
@@ -112,6 +113,12 @@ export default function DashboardPage() {
     participation.durationDays,
     Math.max(1, daysBetween(participation.startDate, todayDate) + 1),
   );
+
+  // Desafio terminado: o painel de "hoje" não faz mais sentido — vira a
+  // tela de resultado. Ver challenge-result.tsx.
+  if (hasEnded) {
+    return <ChallengeResult participation={participation} challengeId={challengeId!} />;
+  }
 
   const ownPosition = rankingQuery.data?.find((e) => e.participantId === participantId)?.position;
 

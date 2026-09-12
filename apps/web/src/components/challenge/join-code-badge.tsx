@@ -1,15 +1,18 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Check, Copy } from "lucide-react";
+import { Check, Share2 } from "lucide-react";
 import { useState } from "react";
 import { getJoinCode } from "@/lib/api/challenges";
 import { useToast } from "@/lib/toast/toast-context";
 
-// O código de entrada nunca aparecia em lugar nenhum da interface depois
-// de criar o desafio — só existia na resposta da API. Fica visível de
-// forma permanente aqui (não só num modal de "sucesso" pontual) porque a
-// pessoa pode querer convidar mais alguém dias depois.
+// Convidar alguém era: copiar 8 caracteres, mandar, e o amigo se cadastrar
+// e procurar onde colar. Agora copia o LINK (/join/CODE), que abre uma
+// página pública mostrando no que a pessoa está entrando — e usa a Web
+// Share API no celular, onde compartilhar é um gesto nativo.
+//
+// O código continua visível no botão porque quem já está dentro às vezes
+// quer ditá-lo, e porque some a dúvida de "que link é esse".
 export function JoinCodeBadge({ challengeId }: { challengeId: string }) {
   const { notify } = useToast();
   const [copied, setCopied] = useState(false);
@@ -25,25 +28,37 @@ export function JoinCodeBadge({ challengeId }: { challengeId: string }) {
 
   if (!data) return null;
 
-  async function handleCopy() {
+  async function handleShare() {
+    const url = `${window.location.origin}/join/${data!.joinCode}`;
+
+    // Share nativo no celular; área de transferência no desktop.
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: "Entra nesse desafio comigo", url });
+        return;
+      } catch {
+        // Cancelar o share do sistema não é erro — cai para o copiar.
+      }
+    }
+
     try {
-      await navigator.clipboard.writeText(data!.joinCode);
+      await navigator.clipboard.writeText(url);
       setCopied(true);
-      notify("Código copiado!", "success");
+      notify("Link de convite copiado!", "success");
       window.setTimeout(() => setCopied(false), 2000);
     } catch {
-      notify("Não foi possível copiar. Copie manualmente: " + data!.joinCode, "info");
+      notify("Não foi possível copiar. O código é " + data!.joinCode, "info");
     }
   }
 
   return (
     <button
-      onClick={handleCopy}
+      onClick={() => void handleShare()}
       className="flex items-center gap-1.5 rounded-sm border border-line bg-surface-2 px-2.5 py-1.5 font-display text-xs font-semibold tracking-[0.2em] text-ink-muted transition-colors hover:border-line-strong hover:text-ink"
-      title="Copiar código de convite"
+      title="Copiar link de convite"
     >
       {data.joinCode}
-      {copied ? <Check className="size-3.5 text-success" aria-hidden /> : <Copy className="size-3.5" aria-hidden />}
+      {copied ? <Check className="size-3.5 text-success" aria-hidden /> : <Share2 className="size-3.5" aria-hidden />}
     </button>
   );
 }

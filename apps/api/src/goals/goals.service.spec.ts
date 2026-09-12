@@ -13,6 +13,7 @@ describe('GoalsService', () => {
   let goalVersionCreate: jest.Mock;
   let goalVersionUpdateMany: jest.Mock;
   let transaction: jest.Mock;
+  let goalVersionFindMany: jest.Mock;
   let prisma: PrismaService;
   let service: GoalsService;
 
@@ -41,9 +42,12 @@ describe('GoalsService', () => {
       }),
     );
 
+    goalVersionFindMany = jest.fn();
+
     prisma = {
       challengeParticipant: { findUnique: participantFindUnique },
       goal: { count: goalCount, findFirst: goalFindFirst, findUnique: goalFindUnique, findMany: goalFindMany },
+      goalVersion: { findMany: goalVersionFindMany },
       $transaction: transaction,
     } as unknown as PrismaService;
 
@@ -237,6 +241,30 @@ describe('GoalsService', () => {
         service.setVersion('g1', 'u1', { ...updateDto, kind: GoalKind.boolean, targetValue: 1 }),
       ).rejects.toThrow(BadRequestException);
       expect(transaction).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('findVersions', () => {
+    // O par Goal/GoalVersion guardava toda a trilha de edições desde a etapa
+    // 5 e nenhuma tela jamais a mostrou. Expor é o que permite ver que
+    // alguém mudou o próprio alvo no meio do desafio — sem proibir a edição.
+    it('returns every version, most recent first', async () => {
+      goalFindUnique.mockResolvedValue({ id: 'g1' });
+      const versions = [{ id: 'v2' }, { id: 'v1' }];
+      goalVersionFindMany.mockResolvedValue(versions);
+
+      await expect(service.findVersions('g1')).resolves.toEqual(versions);
+      expect(goalVersionFindMany).toHaveBeenCalledWith({
+        where: { goalId: 'g1' },
+        orderBy: { validFrom: 'desc' },
+      });
+    });
+
+    it('throws NotFoundException when the goal does not exist', async () => {
+      goalFindUnique.mockResolvedValue(null);
+
+      await expect(service.findVersions('missing')).rejects.toThrow(NotFoundException);
+      expect(goalVersionFindMany).not.toHaveBeenCalled();
     });
   });
 });
