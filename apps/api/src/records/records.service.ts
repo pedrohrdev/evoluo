@@ -306,7 +306,13 @@ export class RecordsService {
     }
 
     const days = await this.prisma.dayResult.findMany({
-      where: { challengeParticipantId: participantId, closed: true },
+      // Mesmo filtro de getHistory: o heatmap desenha uma célula por dia do
+      // desafio, e um dia anterior ao início não tem célula onde cair.
+      where: {
+        challengeParticipantId: participantId,
+        closed: true,
+        resultDate: { gte: participant.challenge.startDate },
+      },
       orderBy: { resultDate: 'asc' },
       select: { resultDate: true, completedGoalsCount: true, dayCompleted: true },
     });
@@ -330,7 +336,7 @@ export class RecordsService {
   async getHistory(participantId: string) {
     const participant = await this.prisma.challengeParticipant.findUnique({
       where: { id: participantId },
-      select: { id: true },
+      select: { id: true, challenge: { select: { startDate: true } } },
     });
 
     if (!participant) {
@@ -338,7 +344,21 @@ export class RecordsService {
     }
 
     const dayResults = await this.prisma.dayResult.findMany({
-      where: { challengeParticipantId: participantId, closed: true },
+      // `resultDate >= startDate` não é redundante com a correção do job
+      // noturno (migration 20260912090000): aquela impede que dias
+      // anteriores ao início do desafio sejam CRIADOS daqui pra frente,
+      // esta garante que nenhum já existente seja EXIBIDO.
+      //
+      // Um dia anterior ao início do desafio é impossível por definição —
+      // o backend recusava check-in nessa data — então exibi-lo como "0/3,
+      // dia perdido" é mostrar uma derrota que não podia acontecer. Filtrar
+      // na leitura resolve sem depender de limpeza de dado em produção, e
+      // cobre qualquer linha remanescente do bug antigo.
+      where: {
+        challengeParticipantId: participantId,
+        closed: true,
+        resultDate: { gte: participant.challenge.startDate },
+      },
       orderBy: { resultDate: 'desc' },
     });
 
