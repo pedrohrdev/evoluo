@@ -96,3 +96,23 @@ Uma etapa só é marcada como `[x]` depois de implementada, testada, integrada a
   Migration `20260912090000_challenge_window_and_closing_catchup.sql`. Testes: 171 passando (18 suítes), 26 novos.
 
   **Pendente de decisão do usuário antes do deploy**: aplicar a migration roda `close_open_daily_periods` na próxima noite. Se houver dias em aberto em produção hoje, eles serão fechados — o que pode quebrar streaks que estão intactos apenas porque o fechamento nunca rodou. Ver a seção correspondente na PR.
+
+- [x] **24. Check-in seguro e histórico fiel (Fase 2 da auditoria)**
+  `CheckInModal` tratava metas diárias E de período: registrar a meta semanal fechava o dia e zerava o streak de quem só queria lançar as horas da semana. Separado em `PeriodGoalModal`, com registro a partir da própria linha da meta. O check-in passou a prever o resultado no cliente (mesma regra do trigger), mostrar "N de 3 metas cumpridas" ao vivo e exigir uma segunda confirmação que nomeia a consequência ("isso zera seu streak de 12 dias e não tem como desfazer").
+
+  `getHistory` passou a devolver o título da `goal_version` referenciada pelo registro — antes o frontend usava o título vigente, então renomear a meta reescrevia todo o histórico, violando a regra da seção "Histórico" do CLAUDE.md. O histórico também passou a mostrar o alvo da época.
+
+  Contador de dia corrigido (era UTC do navegador, adiantava um dia entre 21h e a meia-noite); barra fixa de check-in na zona do polegar em mobile; passada de copy (plurais, jargão de cron, pontos por importância que nunca apareceram em tela).
+
+- [x] **25. Ciclo do produto: convite, encerramento e lembrete (Fase 3 da auditoria)**
+  **Convite**: `GET /challenges/preview/:joinCode` (única rota sem autenticação do app, com limite próprio) e página pública `/join/[code]`, para o link abrir para quem ainda não tem conta. Login/cadastro honram `?next=` (só caminhos internos). `JoinCodeBadge` passou a compartilhar o link, com Web Share API no celular.
+
+  **Encerramento**: passado o `end_date`, o painel vira `ChallengeResult` — pódio final, maior streak, dias completos, totais reais acumulados (do analytics) e "criar a revanche". Antes o produto não tinha fim: o contador travava em "30/30" e o botão de check-in continuava lá.
+
+  **Landing** em `/`, que antes redirecionava direto para o login sem uma linha sobre o que é o produto.
+
+  **Transparência de metas**: `GET /goals/:goalId/versions` e o marcador "editada há N dias". Decisão de negócio confirmada com o usuário: a edição continua valendo **imediatamente**, inclusive para o dia em curso (ver CLAUDE.md seção 2) — a proposta de adiar o efeito para o dia seguinte foi descartada porque puniria quem troca de meta de manhã querendo cumpri-la no mesmo dia.
+
+  **Lembrete diário**: `RemindersService` + `POST /reminders/daily`, protegida por segredo compartilhado (fechada por padrão). Envio plugável: sem `RESEND_API_KEY`/`REMINDER_FROM_EMAIL` o disparo vira no-op com log, para a rota poder ir a produção antes da credencial existir.
+
+  187 testes passando (19 suítes).

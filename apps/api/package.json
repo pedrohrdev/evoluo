@@ -11,7 +11,8 @@
     "prisma:generate": "prisma generate",
     "test": "jest",
     "test:watch": "jest --watch",
-    "test:cov": "jest --coverage"
+    "test:cov": "jest --coverage",
+    "test:int": "jest --config jest.integration.json"
   },
   "dependencies": {
     "@nestjs/common": "^11.2.3",
@@ -33,7 +34,9 @@
     "@types/jest": "^30.0.0",
     "@types/multer": "^2.2.0",
     "@types/node": "^26.4.1",
+    "@types/pg": "^8.23.1",
     "jest": "^30.5.1",
+    "pg": "^8.23.0",
     "prisma": "6.19.3",
     "source-map-support": "^0.5.21",
     "ts-jest": "^29.4.12",
