@@ -2,7 +2,7 @@
 
 import { ArrowLeft, Ban } from "lucide-react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { use } from "react";
 import { EmptyState, LoadingState } from "@/components/ui/feedback";
 import { useRequireAuth } from "@/lib/auth/use-require-auth";
@@ -32,6 +32,7 @@ function ParticipationGate({
 }) {
   const { profile, participation, isLoading, isError } = useProfileParticipation();
   const pathname = usePathname();
+  const router = useRouter();
   const base = `/profiles/${profileId}/challenges/${challengeId}`;
 
   if (isLoading) {
@@ -61,10 +62,21 @@ function ParticipationGate({
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
-      <Link href={`/profiles/${profileId}`} className="mb-4 flex items-center gap-1.5 text-sm text-ink-muted hover:text-ink">
+      {/* router.back() em vez de <Link href={`/profiles/${profileId}`}>: um Link
+          empurraria uma NOVA entrada de histórico idêntica à página de perfil
+          que já está na pilha (chegamos aqui a partir dela), então o botão
+          "Voltar" da própria página de perfil (que também usa router.back())
+          desfaria só esse push e devolveria pra cá de novo — um loop entre
+          as duas telas. Usando router.back() aqui também, cada "voltar"
+          desempilha de verdade, inclusive até o desafio/ranking de quem está
+          navegando. */}
+      <button
+        onClick={() => router.back()}
+        className="mb-4 flex items-center gap-1.5 text-sm text-ink-muted hover:text-ink"
+      >
         <ArrowLeft className="size-4" aria-hidden />
         {profile.displayName}
-      </Link>
+      </button>
 
       <h1 className="mb-1 font-display text-xl font-semibold text-ink">{participation.challengeName}</h1>
 
