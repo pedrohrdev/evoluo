@@ -137,6 +137,7 @@ Perfis são **públicos** para qualquer usuário autenticado no aplicativo, mesm
 - Basta ter o código/ID do desafio para entrar — não há aprovação do criador. O código é não sequencial e difícil de adivinhar.
 - Sair de um desafio marca o vínculo como inativo (não apaga nada): some do ranking ativo, não pode mais registrar, mas histórico, pontos e streaks permanecem intactos e consultáveis no perfil.
 - O fechamento de dia/período usa um fuso horário fixo do servidor (`America/Sao_Paulo`) para todos os participantes, independente do fuso de cada um.
+- Um desafio pode ser criado com `start_date` no futuro (ex.: combinar com os amigos de começar todo mundo junto numa segunda-feira específica). Antes dessa data, ninguém pode registrar nem fazer check-in de nenhuma meta (diária, semanal, mensal ou de duração) — mas já dá pra entrar no desafio e configurar as próprias metas com antecedência.
 
 ## 3. Stack e arquitetura (resumo — detalhes em `docs/arquitetura-tecnica.md`)
 
