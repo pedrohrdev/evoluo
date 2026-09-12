@@ -1,13 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { ParticipantStatus } from '@prisma/client';
 import { todayInSaoPaulo, toDateString } from '../common/date/sao-paulo.util';
 import { PrismaService } from '../prisma/prisma.service';
-import { SupabaseService } from '../supabase/supabase.service';
+import { PushService } from '../push/push.service';
 
 export interface PendingReminder {
   userId: string;
-  email: string;
   displayName: string;
   challengeName: string;
   challengeId: string;
@@ -25,10 +23,12 @@ export interface PendingReminder {
  * A consulta é barata porque o dado já existe: quem não fez check-in hoje é
  * exatamente quem não tem `day_results.closed = true` para a data de hoje.
  *
- * O envio é plugável de propósito. Sem `RESEND_API_KEY` configurada, o
- * serviço apenas registra quantos lembretes seriam enviados e não falha —
- * assim a rota pode ir para produção antes da credencial existir, e o dia em
- * que a chave for configurada nada mais precisa mudar.
+ * O canal é Web Push, não e-mail: a primeira implementação (etapa 25) mandava
+ * e-mail, e o usuário corrigiu — ninguém abre e-mail antes da meia-noite para
+ * salvar um streak. Push chega como qualquer outra notificação do celular.
+ *
+ * Sem chaves VAPID configuradas o serviço registra quantos lembretes faria e
+ * não falha, então a rota pode ir para produção antes das chaves existirem.
  */
 @Injectable()
 export class RemindersService {
@@ -36,8 +36,7 @@ export class RemindersService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly supabase: SupabaseService,
-    private readonly configService: ConfigService,
+    private readonly push: PushService,
   ) {}
 
   /** Participantes ativos, em desafio em curso, sem check-in fechado hoje. */
@@ -75,18 +74,17 @@ export class RemindersService {
     });
     const nameByUser = new Map(profiles.map((p) => [p.id, p.displayName]));
 
-    // O e-mail vive em auth.users, que o Prisma não modela (é do Supabase
-    // Auth) — por isso a busca passa pelo adminClient.
-    const emailByUser = await this.fetchEmails(participants.map((p) => p.userId));
+    // Só quem tem ao menos um dispositivo inscrito — não há para onde
+    // mandar push de quem nunca deu permissão, e contá-lo como "pendente"
+    // inflaria o relatório com destinos inexistentes.
+    const subscribed = await this.push.filterSubscribed(participants.map((p) => p.userId));
 
     return participants.flatMap((participant) => {
-      const email = emailByUser.get(participant.userId);
-      if (!email) return [];
+      if (!subscribed.has(participant.userId)) return [];
 
       return [
         {
           userId: participant.userId,
-          email,
           displayName: nameByUser.get(participant.userId) ?? 'você',
           challengeName: participant.challenge.name,
           challengeId: participant.challengeId,
@@ -97,29 +95,26 @@ export class RemindersService {
     });
   }
 
-  /** Monta e despacha os lembretes. Devolve quantos foram enviados. */
+  /** Monta e despacha os lembretes. Devolve quantos dispositivos receberam. */
   async sendDailyReminders(): Promise<{ pending: number; sent: number; skipped: string | null }> {
     const pending = await this.findPending();
 
-    const apiKey = this.configService.get<string>('RESEND_API_KEY');
-    const from = this.configService.get<string>('REMINDER_FROM_EMAIL');
-
-    if (!apiKey || !from) {
+    if (!this.push.isConfigured()) {
       this.logger.warn(
-        `${pending.length} lembrete(s) pendente(s), nenhum enviado: RESEND_API_KEY/REMINDER_FROM_EMAIL não configuradas.`,
+        `${pending.length} lembrete(s) pendente(s), nenhum enviado: VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY não configuradas.`,
       );
-      return { pending: pending.length, sent: 0, skipped: 'credenciais de e-mail ausentes' };
+      return { pending: pending.length, sent: 0, skipped: 'chaves VAPID ausentes' };
     }
 
     let sent = 0;
     for (const reminder of pending) {
-      try {
-        await this.deliver(apiKey, from, reminder);
-        sent += 1;
-      } catch (error) {
-        // Um e-mail que falha nunca derruba o lote inteiro.
-        this.logger.error(`Falha ao enviar lembrete para ${reminder.userId}: ${String(error)}`);
-      }
+      const { subject, body } = this.buildMessage(reminder);
+      // sendToUser já isola falha por dispositivo e limpa inscrições mortas.
+      sent += await this.push.sendToUser(reminder.userId, {
+        title: subject,
+        body,
+        url: `/c/${reminder.challengeId}`,
+      });
     }
 
     return { pending: pending.length, sent, skipped: null };
@@ -144,48 +139,10 @@ export class RemindersService {
         ? `${missing} para manter seus ${streakDays} de streak em ${reminder.challengeName}.`
         : `${missing} para fechar o dia em ${reminder.challengeName}.`;
 
-    return {
-      subject,
-      body: `Oi, ${reminder.displayName}.\n\n${line}\n\nO dia fecha à meia-noite (horário de Brasília).`,
-    };
-  }
-
-  private async deliver(apiKey: string, from: string, reminder: PendingReminder): Promise<void> {
-    const { subject, body } = this.buildMessage(reminder);
-
-    const response = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from, to: reminder.email, subject, text: body }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`${response.status} ${await response.text()}`);
-    }
-  }
-
-  private async fetchEmails(userIds: string[]): Promise<Map<string, string>> {
-    const unique = Array.from(new Set(userIds));
-    const byUser = new Map<string, string>();
-
-    // listUsers pagina; o volume esperado (participantes ativos sem
-    // check-in num dia) cabe com folga em poucas páginas.
-    let page = 1;
-    for (;;) {
-      const { data, error } = await this.supabase.adminClient.auth.admin.listUsers({ page, perPage: 1000 });
-      if (error || !data?.users?.length) break;
-
-      for (const user of data.users) {
-        if (user.email && unique.includes(user.id)) {
-          byUser.set(user.id, user.email);
-        }
-      }
-
-      if (data.users.length < 1000 || byUser.size >= unique.length) break;
-      page += 1;
-    }
-
-    return byUser;
+    // Corpo curto: numa notificação o sistema trunca, e a informação que
+    // importa (quanto falta e o que está em jogo) tem que caber na primeira
+    // linha. Nada de saudação nem assinatura, que era formato de e-mail.
+    return { subject, body: line };
   }
 
   /** Exposto para o endpoint conferir a data usada, sem recalcular fuso. */

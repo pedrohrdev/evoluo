@@ -26,17 +26,24 @@ class EnvironmentVariables {
   @IsNotEmpty()
   PASSWORD_RESET_REDIRECT_URL?: string;
 
-  // Lembrete diário de check-in. Sem elas o serviço apenas registra quantos
-  // lembretes seriam enviados, sem falhar — ver RemindersService.
+  // Web Push (lembrete diário de check-in). Geradas pelo próprio projeto
+  // com `npm run push:keys` — não dependem de conta em serviço nenhum. Sem
+  // elas o envio vira no-op com log, sem falhar (ver PushService).
   @IsOptional()
   @IsString()
   @IsNotEmpty()
-  RESEND_API_KEY?: string;
+  VAPID_PUBLIC_KEY?: string;
 
   @IsOptional()
   @IsString()
   @IsNotEmpty()
-  REMINDER_FROM_EMAIL?: string;
+  VAPID_PRIVATE_KEY?: string;
+
+  // Contato exigido pelo protocolo VAPID (formato mailto:).
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  VAPID_SUBJECT?: string;
 
   // Segredo compartilhado com o agendador que chama POST /reminders/daily.
   // Sem ele a rota recusa tudo (fechada por padrão).
