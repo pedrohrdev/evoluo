@@ -38,7 +38,7 @@ export class FeedService {
   async getChallengeFeed(challengeId: string, limit = DEFAULT_LIMIT): Promise<FeedEvent[]> {
     const challenge = await this.prisma.challenge.findUnique({
       where: { id: challengeId },
-      select: { id: true },
+      select: { id: true, startDate: true },
     });
 
     if (!challenge) {
@@ -67,9 +67,21 @@ export class FeedService {
 
     // Só dias já FECHADOS: um dia em andamento ainda pode mudar, e anunciar
     // "fulano fechou 3/3" antes do check-in seria mentira.
+    //
+    // E só dias a partir de `start_date`, pelo mesmo motivo de
+    // RecordsService.getHistory/getDaySeries: antes do início do desafio o
+    // backend recusa qualquer check-in, então anunciar "fulano perdeu o
+    // dia" numa data dessas é publicar uma derrota que era impossível. O
+    // job noturno não cria mais day_results anteriores ao início
+    // (migration 20260912090000), mas linhas gravadas antes dessa correção
+    // continuam no banco — filtrar na leitura cobre as duas pontas.
     const [dayResults, specialGoals] = await Promise.all([
       this.prisma.dayResult.findMany({
-        where: { challengeParticipantId: { in: participantIds }, closed: true },
+        where: {
+          challengeParticipantId: { in: participantIds },
+          closed: true,
+          resultDate: { gte: challenge.startDate },
+        },
         orderBy: { resultDate: 'desc' },
         take: limit,
         select: {

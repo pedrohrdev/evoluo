@@ -12,7 +12,7 @@ describe('FeedService', () => {
   let service: FeedService;
 
   beforeEach(() => {
-    challengeFindUnique = jest.fn().mockResolvedValue({ id: 'c1' });
+    challengeFindUnique = jest.fn().mockResolvedValue({ id: 'c1', startDate: new Date('2026-09-14') });
     participantFindMany = jest.fn().mockResolvedValue([
       { id: 'p1', userId: 'u1' },
       { id: 'p2', userId: 'u2' },
@@ -53,6 +53,18 @@ describe('FeedService', () => {
 
     expect(dayResultFindMany.mock.calls[0][0].where).toMatchObject({ closed: true });
     expect(participantFindMany.mock.calls[0][0].where).toMatchObject({ status: ParticipantStatus.active });
+  });
+
+  // Antes do início do desafio o backend recusa qualquer check-in, então
+  // um day_result nessa faixa (resquício do job noturno antigo, corrigido
+  // na migration 20260912090000) não pode virar "fulano perdeu o dia" no
+  // feed — é anunciar uma derrota que era impossível.
+  it('reads only days from the challenge start date onwards', async () => {
+    await service.getChallengeFeed('c1');
+
+    expect(dayResultFindMany.mock.calls[0][0].where).toMatchObject({
+      resultDate: { gte: new Date('2026-09-14') },
+    });
   });
 
   it('turns a closed day into a completed or missed event, named after the participant', async () => {

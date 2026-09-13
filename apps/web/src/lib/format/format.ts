@@ -13,6 +13,22 @@ export function formatDateLong(iso: string): string {
   });
 }
 
+// Data com o dia da SEMANA por extenso ("segunda-feira, 14 de setembro").
+//
+// Existe por causa de um erro real na criação de um desafio: a pessoa
+// combinou de começar "na segunda, dia 14", escolheu no seletor um dia
+// vizinho e só percebeu quando o app liberou o check-in um dia antes —
+// `<input type="date">` mostra 14/09 sem dizer que dia da semana é aquele,
+// e a data de início não é editável depois. Mostrar o dia da semana torna
+// o erro visível antes do envio.
+export function formatWeekdayDateLong(iso: string): string {
+  return new Date(`${iso.slice(0, 10)}T12:00:00Z`).toLocaleDateString("pt-BR", {
+    weekday: "long",
+    day: "2-digit",
+    month: "long",
+  });
+}
+
 export function formatNumber(value: number): string {
   return new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 2 }).format(value);
 }
