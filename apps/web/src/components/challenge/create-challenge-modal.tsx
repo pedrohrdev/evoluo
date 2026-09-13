@@ -6,6 +6,7 @@ import { Field, Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { ApiError } from "@/lib/api/client";
 import { createChallenge } from "@/lib/api/challenges";
+import { formatWeekdayDateLong } from "@/lib/format/format";
 import { todayIsoDate } from "@/lib/format/today";
 import { DurationPicker } from "./duration-picker";
 
@@ -60,7 +61,15 @@ export function CreateChallengeModal({
         <Field
           label="Data de início"
           htmlFor="challenge-start"
-          hint="Pode ser uma data futura — combine com os amigos e todo mundo começa junto naquele dia."
+          // O dia da semana vai junto de propósito: "dia 14" e "segunda"
+          // são a mesma informação na cabeça de quem combinou o desafio,
+          // mas o seletor só mostra o número — e a data de início não dá
+          // pra corrigir depois de criar.
+          hint={
+            startDate
+              ? `Começa ${formatWeekdayDateLong(startDate)}. Pode ser uma data futura — todo mundo começa junto naquele dia.`
+              : "Pode ser uma data futura — combine com os amigos e todo mundo começa junto naquele dia."
+          }
         >
           <Input id="challenge-start" type="date" required value={startDate} onChange={(e) => setStartDate(e.target.value)} />
         </Field>
