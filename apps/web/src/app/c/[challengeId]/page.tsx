@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowRight, Settings2, Trophy } from "lucide-react";
+import { ArrowRight, Settings2 } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { ChallengeFeed } from "@/components/challenge/challenge-feed";
@@ -12,10 +12,9 @@ import { GoalSummaryRow } from "@/components/goals/goal-summary-row";
 import { PeriodGoalModal } from "@/components/goals/period-goal-modal";
 import { PodiumCard } from "@/components/ranking/podium-card";
 import { PushToggle } from "@/components/settings/push-toggle";
-import { RankingList } from "@/components/ranking/ranking-list";
 import { StreakFlame } from "@/components/streak/streak-flame";
 import { Badge } from "@/components/ui/badge";
-import { ErrorState, LoadingState } from "@/components/ui/feedback";
+import { ErrorState } from "@/components/ui/feedback";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import { Surface } from "@/components/ui/surface";
 import { listGoals } from "@/lib/api/goals";
@@ -239,49 +238,30 @@ export default function DashboardPage() {
         <ChallengeFeed challengeId={challengeId!} />
       </section>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
-        <section className="lg:col-span-3">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="font-display text-lg font-semibold text-ink">Metas de período</h2>
-            <Link href={`/c/${challengeId}/setup`} className="text-sm font-medium text-ink-muted hover:text-ink">
-              gerenciar
-            </Link>
-          </div>
-          {secondaryGoals.length === 0 ? (
-            <Surface className="p-5 text-sm text-ink-muted">
-              Nenhuma meta semanal, mensal ou de duração configurada — elas são opcionais.
-            </Surface>
-          ) : (
-            <div className="flex flex-col gap-2">
-              {secondaryGoals.map((goal) => (
-                <GoalSummaryRow
-                  key={goal.id}
-                  goal={goal}
-                  record={recordsByGoalId.get(goal.id)}
-                  onRecord={hasStarted && !hasEnded ? () => setRecordingGoal(goal) : undefined}
-                />
-              ))}
-            </div>
-          )}
-        </section>
-
-        <section className="lg:col-span-2">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="flex items-center gap-1.5 font-display text-lg font-semibold text-ink">
-              <Trophy className="size-4 text-accent" aria-hidden />
-              Ranking
-            </h2>
-            <Badge tone="neutral">{rankingQuery.data?.length ?? 0} participantes</Badge>
-          </div>
-          <Surface className="p-2">
-            {rankingQuery.isLoading ? (
-              <LoadingState label="Carregando ranking…" />
-            ) : (
-              <RankingList entries={rankingQuery.data ?? []} ownParticipantId={participantId} limit={5} />
-            )}
+      <section>
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="font-display text-lg font-semibold text-ink">Metas de período</h2>
+          <Link href={`/c/${challengeId}/setup`} className="text-sm font-medium text-ink-muted hover:text-ink">
+            gerenciar
+          </Link>
+        </div>
+        {secondaryGoals.length === 0 ? (
+          <Surface className="p-5 text-sm text-ink-muted">
+            Nenhuma meta semanal, mensal ou de duração configurada — elas são opcionais.
           </Surface>
-        </section>
-      </div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {secondaryGoals.map((goal) => (
+              <GoalSummaryRow
+                key={goal.id}
+                goal={goal}
+                record={recordsByGoalId.get(goal.id)}
+                onRecord={hasStarted && !hasEnded ? () => setRecordingGoal(goal) : undefined}
+              />
+            ))}
+          </div>
+        )}
+      </section>
 
       <PeriodGoalModal
         goal={recordingGoal}
