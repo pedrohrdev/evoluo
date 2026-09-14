@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { Goal, GoalKind, GoalPeriod, GoalVersion, ParticipantStatus, Prisma } from '@prisma/client';
+import { Goal, GoalKind, GoalPeriod, GoalVersion, ParticipantStatus } from '@prisma/client';
 import {
   currentMonthRangeInSaoPaulo,
   currentWeekRangeInSaoPaulo,
@@ -7,7 +7,6 @@ import {
   todayInSaoPaulo,
 } from '../common/date/sao-paulo.util';
 import { PrismaService } from '../prisma/prisma.service';
-import { CheckInDailyDto, CheckInDailyEntryDto } from './dto/check-in-daily.dto';
 import { RecordDailyGoalDto } from './dto/record-daily-goal.dto';
 import { RecordPeriodGoalDto } from './dto/record-period-goal.dto';
 
@@ -22,101 +21,48 @@ const PERIOD_LABELS: Record<GoalPeriod, string> = {
 export class RecordsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  // Check-in único por dia (CLAUDE.md seção "Streak", regra revisada): o
-  // participante envia de uma vez o que preencheu das metas diárias —
-  // metas de fora do array ficam sem registro (0/3 automático). Rejeita se
-  // o dia de hoje já foi fechado (por um check-in anterior, ou pelo job
-  // noturno numa borda de fuso). Grava os registros e fecha o dia
-  // atomicamente: se check_in_daily_period() falhar (ex.: corrida entre
-  // duas chamadas), a transação desfaz também os daily_records recém-
-  // gravados, nunca deixando um registro "órfão" sem o fechamento
-  // correspondente.
-  async checkInDaily(participantId: string, userId: string, dto: CheckInDailyDto) {
-    const participant = await this.prisma.challengeParticipant.findUnique({
-      where: { id: participantId },
-      select: {
-        id: true,
-        userId: true,
-        status: true,
-        challenge: { select: { startDate: true, endDate: true } },
-      },
-    });
+  // Upsert por (goal_id, record_date) para a meta diária de HOJE — mesmo
+  // padrão de recordCurrentWeek/Month/Challenge: pode ser chamado quantas
+  // vezes quiser ao longo do dia, uma meta de cada vez (registrar agora,
+  // outra mais tarde, corrigir uma já enviada). Regra revisada com o
+  // usuário: não existe mais "check-in único por dia" — o trigger
+  // reconcile_daily_period (supabase/migrations/20260914090000) decide
+  // streak e pontos de forma reativa a cada chamada, podendo inclusive
+  // reverter o streak se uma correção derrubar o dia de 3/3 para menos.
+  async recordCurrentDaily(goalId: string, userId: string, dto: RecordDailyGoalDto) {
+    const { goal, currentVersion } = await this.resolveOpenGoalVersion(goalId, userId, GoalPeriod.daily);
 
-    if (!participant) {
-      throw new NotFoundException('Participante não encontrado.');
-    }
-    if (participant.userId !== userId) {
-      throw new ForbiddenException('Você não pode fazer o check-in de outro participante.');
-    }
-    if (participant.status !== ParticipantStatus.active) {
-      throw new ForbiddenException('Não é possível fazer check-in de um desafio que você já deixou.');
-    }
-    this.assertChallengeWindow(participant.challenge);
+    this.assertActualMatchesKind(currentVersion.kind, dto);
 
     const today = new Date(todayInSaoPaulo());
 
-    const existingToday = await this.prisma.dayResult.findUnique({
-      where: { challengeParticipantId_resultDate: { challengeParticipantId: participantId, resultDate: today } },
-      select: { closed: true },
+    return this.prisma.dailyRecord.upsert({
+      where: { goalId_recordDate: { goalId, recordDate: today } },
+      create: {
+        goalId,
+        goalVersionId: currentVersion.id,
+        challengeParticipantId: goal.challengeParticipantId,
+        recordDate: today,
+        actualValue: dto.actualValue,
+        actualBoolean: dto.actualBoolean,
+        // Placeholders coerentes com a versão vigente: os triggers
+        // compute_daily_record_fields/enforce_daily_record_window do banco
+        // recalculam kind/importance/targetValueSnapshot/completed/
+        // pointsAwarded a partir do goal_version_id, sobrescrevendo
+        // qualquer valor enviado aqui.
+        kind: currentVersion.kind,
+        importance: currentVersion.importance,
+        targetValueSnapshot: currentVersion.targetValue,
+      },
+      update: {
+        goalVersionId: currentVersion.id,
+        actualValue: dto.actualValue ?? null,
+        actualBoolean: dto.actualBoolean ?? null,
+        kind: currentVersion.kind,
+        importance: currentVersion.importance,
+        targetValueSnapshot: currentVersion.targetValue,
+      },
     });
-
-    if (existingToday?.closed) {
-      throw new ConflictException('Você já fez seu check-in de hoje.');
-    }
-
-    const resolved = await Promise.all(
-      dto.records.map(async (entry: CheckInDailyEntryDto) => {
-        const { goal, currentVersion } = await this.resolveOpenGoalVersion(entry.goalId, userId, GoalPeriod.daily);
-
-        if (goal.challengeParticipantId !== participantId) {
-          throw new ForbiddenException('Você não pode registrar a meta de outro participante.');
-        }
-
-        this.assertActualMatchesKind(currentVersion.kind, entry);
-        return { goal, currentVersion, entry };
-      }),
-    );
-
-    await this.prisma.$transaction(async (tx) => {
-      for (const { goal, currentVersion, entry } of resolved) {
-        await tx.dailyRecord.upsert({
-          where: { goalId_recordDate: { goalId: entry.goalId, recordDate: today } },
-          create: {
-            goalId: entry.goalId,
-            goalVersionId: currentVersion.id,
-            challengeParticipantId: goal.challengeParticipantId,
-            recordDate: today,
-            actualValue: entry.actualValue,
-            actualBoolean: entry.actualBoolean,
-            // Placeholders coerentes com a versão vigente: os triggers
-            // compute_daily_record_fields/enforce_daily_record_window do
-            // banco recalculam kind/importance/targetValueSnapshot/
-            // completed/pointsAwarded a partir do goal_version_id,
-            // sobrescrevendo qualquer valor enviado aqui.
-            kind: currentVersion.kind,
-            importance: currentVersion.importance,
-            targetValueSnapshot: currentVersion.targetValue,
-          },
-          update: {
-            goalVersionId: currentVersion.id,
-            actualValue: entry.actualValue ?? null,
-            actualBoolean: entry.actualBoolean ?? null,
-            kind: currentVersion.kind,
-            importance: currentVersion.importance,
-            targetValueSnapshot: currentVersion.targetValue,
-          },
-        });
-      }
-
-      // check_in_daily_period() decide streak, credita pontos e marca
-      // day_results.closed = true para hoje — mesma lógica de
-      // close_daily_period() (supabase/migrations/20260905090900), só que
-      // instantânea e para um único participante (ver
-      // supabase/migrations/20260906090000_instant_daily_checkin.sql).
-      await tx.$executeRaw(Prisma.sql`select check_in_daily_period(${participantId}::uuid)`);
-    });
-
-    return this.getTodayState(participantId);
   }
 
   // Upsert por (goal_id, period_start) — para o período semanal vigente (segunda a

@@ -7,5 +7,8 @@ import { StreakService } from './streak.service';
   imports: [AuthModule],
   controllers: [StreakController],
   providers: [StreakService],
+  // Reutilizado por ProfilesService.getOwnDashboard para embutir o streak
+  // do desafio padrão no bootstrap do painel, sem round-trip separado.
+  exports: [StreakService],
 })
 export class StreakModule {}

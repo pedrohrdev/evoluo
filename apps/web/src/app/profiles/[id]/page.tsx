@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { ErrorState, LoadingState } from "@/components/ui/feedback";
 import { Surface } from "@/components/ui/surface";
 import { StreakFlame } from "@/components/streak/streak-flame";
-import { getProfile, profileQueryKey } from "@/lib/api/profiles";
+import { getOwnDashboard, getProfile, profileQueryKey } from "@/lib/api/profiles";
 import { useAuth } from "@/lib/auth/auth-context";
 import { useRequireAuth } from "@/lib/auth/use-require-auth";
 import { pickDefaultChallenge } from "@/lib/challenge/pick-default-challenge";
@@ -28,13 +28,17 @@ export default function ProfilePage() {
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState(false);
 
+  const isOwn = session?.userId === id;
+
+  // Mesma chave de cache pro próprio perfil em toda a base, então tem que
+  // ser o mesmo queryFn (getOwnDashboard) — ver comentário em
+  // lib/api/profiles.ts e components/layout/user-menu.tsx. Só o perfil de
+  // outra pessoa usa o GET público simples.
   const { data: profile, isLoading, isError, refetch } = useQuery({
     queryKey: profileQueryKey(id),
-    queryFn: () => getProfile(id),
+    queryFn: () => (isOwn ? getOwnDashboard() : getProfile(id)),
     enabled: isReady,
   });
-
-  const isOwn = session?.userId === id;
 
   if (!isReady || isLoading) return <LoadingState label="Carregando perfil…" />;
   if (isError || !profile) return <ErrorState message="Não foi possível carregar este perfil." onRetry={() => void refetch()} />;

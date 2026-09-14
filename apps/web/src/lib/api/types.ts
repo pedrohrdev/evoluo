@@ -153,6 +153,21 @@ export interface PublicProfile {
   challenges: ProfileChallengeParticipation[];
 }
 
+// Painel do desafio padrão (pickDefaultChallenge) embutido no bootstrap do
+// próprio perfil — evita que o dashboard precise de uma 2ª ida-e-volta
+// sequencial só pra buscar isso depois de já saber qual desafio mostrar.
+export interface DefaultChallengeDashboard {
+  challengeId: string;
+  participantId: string;
+  today: TodayState;
+  streak: ParticipantStreak;
+  ranking: RankingEntry[];
+}
+
+export interface OwnDashboard extends PublicProfile {
+  defaultChallenge: DefaultChallengeDashboard | null;
+}
+
 export interface DailyHistoryDay {
   date: string;
   completedGoalsCount: number;

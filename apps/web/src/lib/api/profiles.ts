@@ -1,5 +1,5 @@
 import { apiFetch } from "./client";
-import type { PublicProfile } from "./types";
+import type { OwnDashboard, PublicProfile } from "./types";
 
 // Chave de cache única para GET /profiles/:id — usada em toda tela que lê
 // o perfil de um usuário (perfil público, linha do ranking, bootstrap do
@@ -11,6 +11,15 @@ export function profileQueryKey(userId: string) {
 
 export function getProfile(id: string) {
   return apiFetch<PublicProfile>(`/profiles/${id}`);
+}
+
+// Superset de PublicProfile: mesmo formato de challenges[], mais o painel
+// do desafio padrão embutido (ver DefaultChallengeDashboard). Usado nas
+// duas telas do próprio painel (onboarding e /c/:id) sob a MESMA chave de
+// cache de profileQueryKey — quem só lê `.challenges` nem percebe o campo
+// extra.
+export function getOwnDashboard() {
+  return apiFetch<OwnDashboard>("/profiles/me/dashboard");
 }
 
 type OwnProfile = Pick<PublicProfile, "id" | "displayName" | "avatarUrl" | "createdAt" | "updatedAt">;

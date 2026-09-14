@@ -31,12 +31,14 @@ function writeSnapshot(participantId: string, snapshot: StreakSnapshot) {
   }
 }
 
-// O streak definitivo só muda quando o job de fechamento roda (nunca em
-// tempo real, CLAUDE.md seção "Streak") — então "subiu"/"quebrou" só pode
-// ser percebido comparando o valor de hoje com o que já vimos antes nesta
-// sessão/dispositivo, guardado localmente. "Dia concluído" é a única coisa
-// que de fato acontece em tempo real (day_results.day_completed tentativo).
-// Cada evento dispara no máximo uma vez por transição observada.
+// Regra revisada (CLAUDE.md seção "Streak"): streak e "dia concluído" agora
+// mudam em tempo real, a cada registro (inclusive podendo cair de novo se
+// uma correção derrubar o dia de 3/3 para menos) — não só quando o job de
+// fechamento roda. "Subiu"/"quebrou"/"dia concluído" continuam sendo
+// percebidos comparando o valor atual com o último visto nesta
+// sessão/dispositivo (guardado localmente), o que já cobre naturalmente
+// tanto o crédito quanto a reversão. Cada evento dispara no máximo uma vez
+// por transição observada.
 export function useStreakFeedback(
   participantId: string | undefined,
   current: { currentStreak: number; longestStreak: number; dayCompletedToday: boolean } | undefined,

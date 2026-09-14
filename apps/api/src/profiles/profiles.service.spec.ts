@@ -1,6 +1,9 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { GoalsService } from '../goals/goals.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { RankingService } from '../ranking/ranking.service';
+import { RecordsService } from '../records/records.service';
+import { StreakService } from '../streak/streak.service';
 import { SupabaseService } from '../supabase/supabase.service';
 import { ProfilesService } from './profiles.service';
 
@@ -10,10 +13,16 @@ describe('ProfilesService', () => {
   let participantFindMany: jest.Mock;
   let dailyRecordGroupBy: jest.Mock;
   let findAllForParticipants: jest.Mock;
+  let getTodayState: jest.Mock;
+  let getStreak: jest.Mock;
+  let getRanking: jest.Mock;
   let storageUpload: jest.Mock;
   let storageGetPublicUrl: jest.Mock;
   let prisma: PrismaService;
   let goalsService: GoalsService;
+  let recordsService: RecordsService;
+  let streakService: StreakService;
+  let rankingService: RankingService;
   let supabase: SupabaseService;
   let service: ProfilesService;
 
@@ -23,6 +32,9 @@ describe('ProfilesService', () => {
     participantFindMany = jest.fn();
     dailyRecordGroupBy = jest.fn().mockResolvedValue([]);
     findAllForParticipants = jest.fn().mockResolvedValue(new Map());
+    getTodayState = jest.fn();
+    getStreak = jest.fn();
+    getRanking = jest.fn();
     storageUpload = jest.fn().mockResolvedValue({ error: null });
     storageGetPublicUrl = jest.fn().mockReturnValue({ data: { publicUrl: 'https://cdn.test/avatars/u1/avatar.jpg' } });
     prisma = {
@@ -31,6 +43,9 @@ describe('ProfilesService', () => {
       dailyRecord: { groupBy: dailyRecordGroupBy },
     } as unknown as PrismaService;
     goalsService = { findAllForParticipants } as unknown as GoalsService;
+    recordsService = { getTodayState } as unknown as RecordsService;
+    streakService = { getStreak } as unknown as StreakService;
+    rankingService = { getRanking } as unknown as RankingService;
     supabase = {
       adminClient: {
         storage: {
@@ -38,7 +53,7 @@ describe('ProfilesService', () => {
         },
       },
     } as unknown as SupabaseService;
-    service = new ProfilesService(prisma, goalsService, supabase);
+    service = new ProfilesService(prisma, goalsService, recordsService, streakService, rankingService, supabase);
   });
 
   describe('findById', () => {
@@ -203,6 +218,85 @@ describe('ProfilesService', () => {
 
       await expect(service.getPublicProfile('missing')).rejects.toThrow(NotFoundException);
       expect(participantFindMany).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('getOwnDashboard', () => {
+    function mockParticipant(overrides: Record<string, unknown>) {
+      return {
+        id: 'p1',
+        status: 'active',
+        joinedAt: new Date('2026-01-05'),
+        leftAt: null,
+        currentStreak: 4,
+        longestStreak: 9,
+        totalPoints: 220,
+        totalDaysCompleted: 4,
+        challenge: { id: 'c1', name: 'Desafio', durationDays: 30, startDate: new Date(), endDate: new Date() },
+        ...overrides,
+      };
+    }
+
+    it('embeds today/streak/ranking of the default (active, most recently checked-in) challenge, in one call each', async () => {
+      findUnique.mockResolvedValue({ id: 'u1' });
+      participantFindMany.mockResolvedValue([
+        mockParticipant({ id: 'p1', challenge: { ...mockParticipant({}).challenge, id: 'c1' } }),
+        mockParticipant({ id: 'p2', challenge: { ...mockParticipant({}).challenge, id: 'c2' } }),
+      ]);
+      dailyRecordGroupBy.mockResolvedValue([
+        { challengeParticipantId: 'p1', _max: { recordDate: new Date('2026-03-01') } },
+        { challengeParticipantId: 'p2', _max: { recordDate: new Date('2026-03-10') } },
+      ]);
+      const today = { daily: [], weekly: [], monthly: [], challenge: [] };
+      const streak = { participantId: 'p2', currentStreak: 4, longestStreak: 9, today: null };
+      const ranking = [{ position: 1, participantId: 'p2' }];
+      getTodayState.mockResolvedValue(today);
+      getStreak.mockResolvedValue(streak);
+      getRanking.mockResolvedValue(ranking);
+
+      const result = await service.getOwnDashboard('u1');
+
+      // p2 tem o check-in mais recente (10/03 > 01/03), então é o desafio
+      // padrão — a mesma regra do frontend (pickDefaultChallenge).
+      expect(getTodayState).toHaveBeenCalledWith('p2');
+      expect(getStreak).toHaveBeenCalledWith('p2');
+      expect(getRanking).toHaveBeenCalledWith('c2');
+      expect(result.defaultChallenge).toEqual({
+        challengeId: 'c2',
+        participantId: 'p2',
+        today,
+        streak,
+        ranking,
+      });
+    });
+
+    it('returns defaultChallenge null and skips the extra calls when there is no active participation', async () => {
+      findUnique.mockResolvedValue({ id: 'u1' });
+      participantFindMany.mockResolvedValue([mockParticipant({ status: 'inactive' })]);
+
+      const result = await service.getOwnDashboard('u1');
+
+      expect(result.defaultChallenge).toBeNull();
+      expect(getTodayState).not.toHaveBeenCalled();
+      expect(getStreak).not.toHaveBeenCalled();
+      expect(getRanking).not.toHaveBeenCalled();
+    });
+
+    it('falls back to the most recently joined active challenge when nobody has checked in yet', async () => {
+      findUnique.mockResolvedValue({ id: 'u1' });
+      // challenges já vêm ordenados por joinedAt desc (orderBy do Prisma) —
+      // p1 é o mais recém-entrado.
+      participantFindMany.mockResolvedValue([
+        mockParticipant({ id: 'p1', challenge: { ...mockParticipant({}).challenge, id: 'c1' } }),
+        mockParticipant({ id: 'p2', challenge: { ...mockParticipant({}).challenge, id: 'c2' } }),
+      ]);
+      getTodayState.mockResolvedValue({ daily: [], weekly: [], monthly: [], challenge: [] });
+      getStreak.mockResolvedValue({ participantId: 'p1', currentStreak: 0, longestStreak: 0, today: null });
+      getRanking.mockResolvedValue([]);
+
+      const result = await service.getOwnDashboard('u1');
+
+      expect(result.defaultChallenge?.participantId).toBe('p1');
     });
   });
 

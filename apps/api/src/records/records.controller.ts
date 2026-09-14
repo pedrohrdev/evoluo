@@ -2,7 +2,7 @@ import { Body, Controller, Get, Param, ParseUUIDPipe, Put, UseGuards } from '@ne
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { SupabaseAuthGuard } from '../auth/guards/supabase-auth.guard';
 import { AuthenticatedUser } from '../auth/interfaces/authenticated-user.interface';
-import { CheckInDailyDto } from './dto/check-in-daily.dto';
+import { RecordDailyGoalDto } from './dto/record-daily-goal.dto';
 import { RecordPeriodGoalDto } from './dto/record-period-goal.dto';
 import { RecordsService } from './records.service';
 
@@ -11,25 +11,24 @@ import { RecordsService } from './records.service';
 export class RecordsController {
   constructor(private readonly recordsService: RecordsService) {}
 
-  // PUT (não POST): concluir o check-in de hoje é uma operação idempotente
-  // do ponto de vista de retry de rede (reenviar a mesma requisição não
-  // duplica pontos), mas só pode ser feita UMA VEZ por dia por participante
-  // (CLAUDE.md seção "Streak") — chamadas seguintes no mesmo dia são
-  // rejeitadas pelo service. Não existe parâmetro de data: é sempre "hoje".
-  @Put('challenge-participants/:participantId/daily-check-in')
-  checkInDaily(
+  // Upsert idempotente por goalId, sempre para HOJE — mesmo padrão de
+  // recordCurrentWeek/Month/Challenge abaixo. Regra revisada com o usuário:
+  // não existe mais "check-in único por dia"; cada meta diária pode ser
+  // registrada e corrigida quantas vezes quiser ao longo do dia. Streak e
+  // pontos reagem em tempo real (trigger reconcile_daily_period, ver
+  // supabase/migrations/20260914090000).
+  @Put('goals/:goalId/daily-record')
+  recordCurrentDaily(
     @CurrentUser() user: AuthenticatedUser,
-    @Param('participantId', ParseUUIDPipe) participantId: string,
-    @Body() dto: CheckInDailyDto,
+    @Param('goalId', ParseUUIDPipe) goalId: string,
+    @Body() dto: RecordDailyGoalDto,
   ) {
-    return this.recordsService.checkInDaily(participantId, user.id, dto);
+    return this.recordsService.recordCurrentDaily(goalId, user.id, dto);
   }
 
-  // Metas semanais/mensais/de duração NÃO entraram na regra de "check-in
-  // único por dia" — continuam podendo ser atualizadas livremente até o
-  // fim do próprio período (upsert idempotente por goalId, sem streak
-  // envolvido, sem risco de oscilação). Também sem parâmetro de período: é
-  // sempre o que contém hoje.
+  // Metas semanais/mensais/de duração seguem o mesmo padrão — upsert
+  // idempotente por goalId, livre até o fim do próprio período. Também sem
+  // parâmetro de período: é sempre o que contém hoje.
   @Put('goals/:goalId/weekly-record')
   recordCurrentWeek(
     @CurrentUser() user: AuthenticatedUser,

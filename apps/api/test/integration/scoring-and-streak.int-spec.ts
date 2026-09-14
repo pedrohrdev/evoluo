@@ -15,7 +15,8 @@ import {
  * A lógica que decide o resultado do produto vive em SQL, não no NestJS:
  * `compute_daily_record_fields` decide se a meta foi cumprida e quantos
  * pontos vale, `enforce_daily_record_window` decide o que pode ser gravado,
- * `check_in_daily_period` e `close_daily_period` decidem o streak.
+ * `reconcile_daily_period` (trigger em cada INSERT/UPDATE de daily_records)
+ * e `close_daily_period` decidem o streak.
  *
  * Nenhum teste unitário toca nisso (todos mockam o PrismaService). Estes
  * rodam as migrations de verdade.
@@ -131,16 +132,24 @@ describe('regras no banco (integração)', () => {
     });
   });
 
-  describe('check-in instantâneo', () => {
-    it('sobe o streak com 3 de 3 e credita os pontos uma única vez', async () => {
+  describe('check-in reativo (multi-registro no mesmo dia)', () => {
+    // Regra revertida a pedido do usuário: check-in único por dia deixou de
+    // existir. Cada meta diária é um upsert avulso (mesmo padrão de
+    // semanal/mensal/desafio) e o trigger reconcile_daily_period decide
+    // streak/pontos a cada INSERT/UPDATE em daily_records — sem nenhuma
+    // chamada explícita de "fechar o dia".
+    it('sobe o streak e credita os pontos assim que a 3ª meta bate no mesmo dia, sem nenhuma chamada extra', async () => {
       const user = await createUser(client, 'Ana');
       const { participantId } = await createChallenge(client, user);
       const goals = await createThreeDailyGoals(client, participantId);
 
-      for (const goal of goals) {
-        await recordDaily(client, goal, participantId, { actualBoolean: true });
-      }
-      await client.query('select check_in_daily_period($1::uuid)', [participantId]);
+      await recordDaily(client, goals[0], participantId, { actualBoolean: true });
+      await recordDaily(client, goals[1], participantId, { actualBoolean: true });
+      expect(await participantState(client, participantId)).toMatchObject({ current_streak: 0, total_points: 60 });
+
+      // A 3ª meta, registrada minutos depois, é o que fecha o dia — não uma
+      // chamada separada.
+      await recordDaily(client, goals[2], participantId, { actualBoolean: true });
 
       expect(await participantState(client, participantId)).toMatchObject({
         current_streak: 1,
@@ -148,16 +157,9 @@ describe('regras no banco (integração)', () => {
         total_points: 90,
         total_days_completed: 1,
       });
-
-      // Segunda chamada no mesmo dia é barrada — sem isso o streak e os
-      // pontos dobrariam.
-      await expect(client.query('select check_in_daily_period($1::uuid)', [participantId])).rejects.toThrow(
-        /já foi concluído/,
-      );
-      expect(await participantState(client, participantId)).toMatchObject({ total_points: 90, current_streak: 1 });
     });
 
-    it('zera o streak com 2 de 3, mas credita os pontos das metas cumpridas', async () => {
+    it('mantém o streak zerado com 2 de 3, mas credita os pontos das metas cumpridas', async () => {
       const user = await createUser(client, 'Ana');
       const { participantId } = await createChallenge(client, user);
       const goals = await createThreeDailyGoals(client, participantId);
@@ -165,7 +167,6 @@ describe('regras no banco (integração)', () => {
       await recordDaily(client, goals[0], participantId, { actualBoolean: true });
       await recordDaily(client, goals[1], participantId, { actualBoolean: true });
       await recordDaily(client, goals[2], participantId, { actualBoolean: false });
-      await client.query('select check_in_daily_period($1::uuid)', [participantId]);
 
       expect(await participantState(client, participantId)).toMatchObject({
         current_streak: 0,
@@ -174,30 +175,76 @@ describe('regras no banco (integração)', () => {
       });
     });
 
-    // Etapa 23: sem esta checagem, o desafio nunca terminava — o check-in
-    // seguia creditando pontos e streak depois do último dia.
-    it('recusa check-in depois que o desafio termina', async () => {
+    it('reverte o streak e revoga os pontos daquela meta quando uma correção derruba o dia de 3/3 para 2/3', async () => {
       const user = await createUser(client, 'Ana');
-      const { participantId } = await createChallenge(client, user, {
-        durationDays: 30,
-        startDate: '2020-01-01',
+      const { participantId } = await createChallenge(client, user);
+      const goals = await createThreeDailyGoals(client, participantId);
+
+      for (const goal of goals) {
+        await recordDaily(client, goal, participantId, { actualBoolean: true });
+      }
+      expect(await participantState(client, participantId)).toMatchObject({
+        current_streak: 1,
+        longest_streak: 1,
+        total_points: 90,
+        total_days_completed: 1,
       });
 
-      await expect(client.query('select check_in_daily_period($1::uuid)', [participantId])).rejects.toThrow(
-        /já terminou/,
+      // Participante corrige a 3ª meta pra "não" mais tarde no mesmo dia.
+      await recordDaily(client, goals[2], participantId, { actualBoolean: false });
+
+      expect(await participantState(client, participantId)).toMatchObject({
+        current_streak: 0,
+        // longest_streak é só informativo (CLAUDE.md seção "Streak") — o
+        // pico já alcançado no dia não é apagado por uma correção depois.
+        longest_streak: 1,
+        // Só os 20 pontos da meta corrigida somem; as outras duas continuam
+        // cumpridas.
+        total_points: 60,
+        total_days_completed: 0,
+      });
+
+      const { rows } = await client.query(
+        `select count(*)::int as n from points_ledger pl
+         join daily_records dr on dr.id = pl.source_record_id
+         where dr.goal_id = $1`,
+        [goals[2].goalId],
       );
+      expect(rows[0].n).toBe(0);
     });
 
-    it('recusa check-in antes de o desafio começar', async () => {
+    it('re-credita o streak e os pontos se a meta corrigida for cumprida de novo no mesmo dia', async () => {
       const user = await createUser(client, 'Ana');
-      const { participantId } = await createChallenge(client, user, {
-        durationDays: 30,
-        startDate: '2999-01-01',
-      });
+      const { participantId } = await createChallenge(client, user);
+      const goals = await createThreeDailyGoals(client, participantId);
 
-      await expect(client.query('select check_in_daily_period($1::uuid)', [participantId])).rejects.toThrow(
-        /ainda não começou/,
+      for (const goal of goals) {
+        await recordDaily(client, goal, participantId, { actualBoolean: true });
+      }
+      await recordDaily(client, goals[2], participantId, { actualBoolean: false }); // derruba pra 2/3
+      await recordDaily(client, goals[2], participantId, { actualBoolean: true }); // corrige de volta
+
+      expect(await participantState(client, participantId)).toMatchObject({
+        current_streak: 1,
+        longest_streak: 1,
+        total_points: 90,
+        total_days_completed: 1,
+      });
+    });
+
+    it('day_results reflete o progresso do dia em tempo real, sem esperar o fechamento noturno', async () => {
+      const user = await createUser(client, 'Ana');
+      const { participantId } = await createChallenge(client, user);
+      const goals = await createThreeDailyGoals(client, participantId);
+
+      await recordDaily(client, goals[0], participantId, { actualBoolean: true });
+
+      const { rows } = await client.query(
+        `select completed_goals_count, day_completed, closed
+         from day_results where challenge_participant_id = $1`,
+        [participantId],
       );
+      expect(rows[0]).toMatchObject({ completed_goals_count: 1, day_completed: false, closed: false });
     });
   });
 
@@ -231,6 +278,50 @@ describe('regras no banco (integração)', () => {
         participantId,
       ]);
       expect(rows[0].n).toBe(0);
+    });
+
+    // O caso que reconcile_daily_period + close_daily_period precisam
+    // combinar sem dobrar nada: um dia que já foi decidido reativamente
+    // (streak já aplicado a challenge_participants, day_results já existe)
+    // vira "ontem" quando a noite chega — o job só precisa trancar, nunca
+    // reaplicar o incremento.
+    it('só tranca (não reaplica streak/pontos) um dia que já tinha sido decidido reativamente', async () => {
+      const user = await createUser(client, 'Ana');
+      const { participantId } = await createChallenge(client, user, { durationDays: 30, startDate: '2020-01-01' });
+      await client.query('update challenges set start_date = current_date - 1');
+      // joined_at precisa ser anterior ao dia sendo fechado — o default
+      // (now(), "hoje") excluiria o participante do loop de close_daily_period
+      // por "ainda não tinha entrado" naquele dia.
+      await client.query('update challenge_participants set joined_at = now() - interval \'1 day\' where id = $1', [
+        participantId,
+      ]);
+
+      // Simula o que reconcile_daily_period já teria deixado para "ontem":
+      // streak aplicado ao participante e day_results aberto (closed=false).
+      await client.query(
+        'update challenge_participants set current_streak = 1, longest_streak = 1, total_points = 90, total_days_completed = 1 where id = $1',
+        [participantId],
+      );
+      await client.query(
+        `insert into day_results (challenge_participant_id, result_date, completed_goals_count, day_completed, streak_after, closed)
+         values ($1, current_date - 1, 3, true, 1, false)`,
+        [participantId],
+      );
+
+      await client.query(`select close_daily_period((current_date - 1)::date)`);
+
+      // Nada mudou nos agregados — só o trancamento.
+      expect(await participantState(client, participantId)).toMatchObject({
+        current_streak: 1,
+        longest_streak: 1,
+        total_points: 90,
+        total_days_completed: 1,
+      });
+      const { rows } = await client.query(
+        'select closed from day_results where challenge_participant_id = $1 and result_date = current_date - 1',
+        [participantId],
+      );
+      expect(rows[0]).toMatchObject({ closed: true });
     });
   });
 

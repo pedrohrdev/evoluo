@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Avatar } from "@/components/profile/avatar";
 import { Dropdown, DropdownContent, DropdownItem, DropdownSeparator, DropdownTrigger } from "@/components/ui/dropdown";
-import { getProfile, profileQueryKey } from "@/lib/api/profiles";
+import { getOwnDashboard, profileQueryKey } from "@/lib/api/profiles";
 import { useAuth } from "@/lib/auth/auth-context";
 import { useSound } from "@/lib/sounds/sound-context";
 
@@ -15,11 +15,14 @@ export function UserMenu() {
   const { enabled, setEnabled } = useSound();
   const router = useRouter();
 
-  // Mesma chave de cache do perfil usada no resto do app — normalmente já
-  // está quente quando o menu renderiza, então não custa uma requisição.
+  // Mesma chave de cache do perfil usada no resto do app (getOwnDashboard,
+  // não getProfile: as duas telas do próprio painel já usam essa chave com
+  // o bootstrap combinado — usar um queryFn diferente aqui faria as duas
+  // brigarem pelo mesmo cache) — normalmente já está quente quando o menu
+  // renderiza, então não custa uma requisição.
   const { data: profile } = useQuery({
     queryKey: profileQueryKey(session?.userId ?? ""),
-    queryFn: () => getProfile(session!.userId),
+    queryFn: () => getOwnDashboard(),
     enabled: !!session,
     staleTime: 5 * 60_000,
   });

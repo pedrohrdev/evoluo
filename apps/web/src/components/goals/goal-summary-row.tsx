@@ -16,9 +16,10 @@ function stateOf(record: RecordEntry | undefined): GoalState {
 
 // Linha de meta em modo resumo. Sem `onRecord` é somente-leitura — usada
 // para exibir a meta de OUTRO participante (perfil público, CLAUDE.md seção
-// 2 "Perfis"). Com `onRecord`, ganha um botão de registrar: é assim que as
-// metas de período são lançadas desde que saíram de dentro do check-in
-// diário (ver period-goal-modal.tsx).
+// 2 "Perfis"). Com `onRecord`, ganha um botão de registrar: é assim que
+// qualquer meta (diária, semanal, mensal ou de duração) é lançada — mesmo
+// modal avulso por goalId para as quatro periodicidades (ver
+// period-goal-modal.tsx).
 export function GoalSummaryRow({
   goal,
   record,

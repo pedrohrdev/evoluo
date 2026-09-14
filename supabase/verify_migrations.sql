@@ -68,7 +68,7 @@ from (values
   ('handle_new_user'), ('generate_join_code'), ('set_left_at_on_deactivate'),
   ('enforce_daily_goal_limit'), ('prevent_goal_version_mutation'), ('prevent_goal_version_delete'),
   ('set_goal_version'), ('compute_daily_record_fields'), ('compute_period_record_fields'),
-  ('enforce_daily_record_window'), ('enforce_period_record_window'), ('upsert_day_result'),
+  ('enforce_daily_record_window'), ('enforce_period_record_window'), ('reconcile_daily_period'),
   ('close_daily_period'), ('close_period_records')
 ) as t(nome)
 left join pg_proc pr on pr.proname = t.nome and pr.pronamespace = 'public'::regnamespace
@@ -85,7 +85,7 @@ from (values
   ('trg_10_enforce_weekly_record_window'), ('trg_20_compute_weekly_record_fields'),
   ('trg_10_enforce_monthly_record_window'), ('trg_20_compute_monthly_record_fields'),
   ('trg_10_enforce_challenge_record_window'), ('trg_20_compute_challenge_record_fields'),
-  ('trg_30_upsert_day_result')
+  ('trg_30_reconcile_daily_period')
 ) as t(nome)
 left join pg_trigger tg on tg.tgname = t.nome and not tg.tgisinternal
 group by t.nome

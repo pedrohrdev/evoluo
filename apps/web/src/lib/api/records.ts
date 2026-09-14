@@ -6,16 +6,12 @@ export interface RecordInput {
   actualBoolean?: boolean;
 }
 
-// Check-in único por dia (CLAUDE.md seção "Streak"): substitui o antigo
-// PUT /goals/:goalId/daily-record por meta avulsa — agora as metas
-// diárias só são registradas em bloco, uma vez por dia, e o próprio envio
-// já fecha o dia (streak/pontos instantâneos). Rejeita com 409 se o dia já
-// foi fechado (ver check-in-modal.tsx).
-export function checkInDaily(participantId: string, records: ({ goalId: string } & RecordInput)[]) {
-  return apiFetch<TodayState>(`/challenge-participants/${participantId}/daily-check-in`, {
-    method: "PUT",
-    body: { records },
-  });
+// Regra revisada (CLAUDE.md seção "Streak"): check-in único por dia foi
+// revertido — cada meta diária volta a ser um registro avulso por goalId,
+// igual semanal/mensal/de desafio, podendo ser corrigida quantas vezes
+// quiser ao longo do dia. Streak/pontos reagem em tempo real no banco.
+export function recordDaily(goalId: string, input: RecordInput) {
+  return apiFetch<RecordEntry>(`/goals/${goalId}/daily-record`, { method: "PUT", body: input });
 }
 
 export function recordWeekly(goalId: string, input: RecordInput) {

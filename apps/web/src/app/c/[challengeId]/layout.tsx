@@ -4,6 +4,7 @@ import { use } from "react";
 import { AppShell } from "@/components/layout/app-shell";
 import { ChallengeSettingsMenu } from "@/components/challenge/challenge-settings-menu";
 import { JoinCodeBadge } from "@/components/challenge/join-code-badge";
+import { DashboardSkeleton } from "@/components/dashboard/dashboard-skeleton";
 import { EmptyState } from "@/components/ui/feedback";
 import { LoadingState } from "@/components/ui/feedback";
 import { ChallengeProvider, useChallenge } from "@/lib/challenge/challenge-context";
@@ -12,13 +13,18 @@ import { Ban } from "lucide-react";
 import Link from "next/link";
 
 function ChallengeGate({ children }: { children: React.ReactNode }) {
-  const { participation, isLoading, isError } = useChallenge();
+  const { challengeId, participation, isLoading, isError } = useChallenge();
 
+  // O cabeçalho/navegação (AppShell) não depende de nada que ainda esteja
+  // carregando — challengeId já vem da própria URL — então aparece na
+  // hora, com um esqueleto do painel embaixo, em vez de uma tela em branco
+  // com só um spinner centralizado (pedido do usuário: "uma tela legal de
+  // carregando").
   if (isLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center">
-        <LoadingState label="Carregando desafio…" />
-      </div>
+      <AppShell challengeId={challengeId}>
+        <DashboardSkeleton />
+      </AppShell>
     );
   }
 

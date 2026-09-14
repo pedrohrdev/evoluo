@@ -13,24 +13,18 @@ import { formatValueForKind } from "@/lib/format/format";
 import { useSound } from "@/lib/sounds/sound-context";
 import { useToast } from "@/lib/toast/toast-context";
 
-const PERIOD_HINT: Record<Exclude<GoalPeriod, "daily">, string> = {
+const PERIOD_HINT: Record<GoalPeriod, string> = {
+  daily: "Vale para hoje. Dá para registrar e corrigir quantas vezes quiser até virar o dia — streak e pontos reagem na hora.",
   weekly: "Vale para a semana atual (segunda a domingo). Dá para atualizar quantas vezes quiser até domingo.",
   monthly: "Vale para o mês atual. Dá para atualizar quantas vezes quiser até o último dia.",
   challenge: "Vale para todo o desafio. Dá para atualizar quantas vezes quiser até o último dia.",
 };
 
-// Registro de meta semanal/mensal/de duração — separado do check-in diário
-// de propósito.
-//
-// Antes, o único caminho para lançar a meta da semana era o modal de
-// check-in, que SEMPRE fechava o dia: quem abria o app de manhã só para
-// registrar as horas da semana perdia o streak sem nunca ter pretendido
-// fazer check-in. São operações com consequências diferentes e agora têm
-// portas diferentes.
-//
-// Diferente do check-in, este registro é livremente atualizável até o fim do
-// próprio período (não há streak envolvido, então não há risco de oscilação)
-// — é a regra que já valia no backend desde a etapa 12.
+// Registro de meta avulso por goalId — mesmo formulário para diária,
+// semanal, mensal e de duração (regra revisada: o check-in único por dia
+// foi revertido, então a diária deixou de ter um fluxo separado). Cada
+// período é livremente atualizável até o fim da própria janela (hoje, ou a
+// semana/mês/desafio em curso).
 export function PeriodGoalModal({
   goal,
   record,
@@ -49,9 +43,7 @@ export function PeriodGoalModal({
       open={open}
       onOpenChange={onOpenChange}
       title={goal?.currentVersion?.title ?? "Registrar meta"}
-      description={
-        goal && goal.periodType !== "daily" ? PERIOD_HINT[goal.periodType as Exclude<GoalPeriod, "daily">] : undefined
-      }
+      description={goal ? PERIOD_HINT[goal.periodType] : undefined}
     >
       {goal ? (
         <PeriodGoalForm key={goal.id} goal={goal} record={record} onOpenChange={onOpenChange} onRecorded={onRecorded} />
@@ -89,7 +81,7 @@ function PeriodGoalForm({
 
     setPending(true);
     try {
-      const periodType = goal.periodType as Exclude<GoalPeriod, "daily">;
+      const periodType = goal.periodType;
       const body = isBoolean ? { actualBoolean: booleanValue } : { actualValue: Number(value) };
       const saved = await RECORD_FN[periodType](goal.id, body);
 

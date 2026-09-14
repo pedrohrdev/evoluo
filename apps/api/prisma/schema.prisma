@@ -321,14 +321,15 @@ model PointsLedger {
   @@map("points_ledger")
 }
 
-// Um por participante por dia. Durante o dia em curso é atualizada de
-// forma "tentativa" a cada registro diário (trigger upsert_day_result,
-// `closed = false`) só para exibir progresso em tempo real (ex.: "2/3
-// hoje") — o streak em ChallengeParticipant.currentStreak só é atualizado
-// de fato quando close_daily_period() fecha o dia (`closed = true`),
-// nunca em tempo real, para o streak não oscilar durante o dia
-// (docs/arquitetura-tecnica.md seção 3 "Day Evaluation"). Esta etapa só
-// lê; nenhuma escrita aqui é feita pela aplicação.
+// Um por participante por dia. Atualizada em tempo real a cada registro
+// diário (trigger reconcile_daily_period, `closed = false` enquanto for
+// hoje) — o streak em ChallengeParticipant.currentStreak também é
+// atualizado nesse momento (regra revisada: streak/pontos reagem a cada
+// check-in ao longo do dia, podendo subir e descer se uma correção
+// derrubar o dia de 3/3 para menos). `closed = true` só depois que
+// close_daily_period() tranca o dia à noite — nesse ponto o streak já
+// tinha sido decidido, o job só impede novas mudanças. Esta etapa só lê;
+// nenhuma escrita aqui é feita pela aplicação.
 model DayResult {
   id                     String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   challengeParticipantId String   @map("challenge_participant_id") @db.Uuid

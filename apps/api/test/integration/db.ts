@@ -154,6 +154,10 @@ export async function createThreeDailyGoals(
   );
 }
 
+// Upsert por (goal_id, record_date), como RecordsService.recordCurrentDaily
+// faz — a mesma chamada serve tanto para o primeiro registro do dia quanto
+// para corrigi-lo mais tarde (regra revisada: check-in único por dia foi
+// revertido, dá pra registrar/corrigir quantas vezes quiser no mesmo dia).
 export async function recordDaily(
   client: Client,
   goal: { goalId: string; versionId: string },
@@ -163,7 +167,10 @@ export async function recordDaily(
   await client.query(
     `insert into daily_records
        (goal_id, goal_version_id, challenge_participant_id, record_date, actual_value, actual_boolean, kind, importance)
-     values ($1, $2, $3, (now() at time zone 'America/Sao_Paulo')::date, $4, $5, 'hours', 'high')`,
+     values ($1, $2, $3, (now() at time zone 'America/Sao_Paulo')::date, $4, $5, 'hours', 'high')
+     on conflict (goal_id, record_date) do update set
+       actual_value = excluded.actual_value,
+       actual_boolean = excluded.actual_boolean`,
     [goal.goalId, goal.versionId, participantId, value.actualValue ?? null, value.actualBoolean ?? null],
   );
 }

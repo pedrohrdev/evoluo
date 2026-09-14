@@ -10,8 +10,9 @@ import { EmptyState, ErrorState, LoadingState } from "@/components/ui/feedback";
 import { Surface } from "@/components/ui/surface";
 import { CreateChallengeModal } from "@/components/challenge/create-challenge-modal";
 import { JoinChallengeModal } from "@/components/challenge/join-challenge-modal";
+import { ChallengeListSkeleton } from "@/components/dashboard/challenge-list-skeleton";
 import { StreakFlame } from "@/components/streak/streak-flame";
-import { getProfile, profileQueryKey } from "@/lib/api/profiles";
+import { getOwnDashboard, profileQueryKey } from "@/lib/api/profiles";
 import { useAuth } from "@/lib/auth/auth-context";
 import { useRequireAuth } from "@/lib/auth/use-require-auth";
 import { pickDefaultChallenge } from "@/lib/challenge/pick-default-challenge";
@@ -40,7 +41,7 @@ function OnboardingContent() {
 
   const { data: profile, isLoading, isError, refetch } = useQuery({
     queryKey: profileQueryKey(session?.userId ?? ""),
-    queryFn: () => getProfile(session!.userId),
+    queryFn: () => getOwnDashboard(),
     enabled: isReady && !!session,
   });
 
@@ -97,7 +98,7 @@ function OnboardingContent() {
         </div>
       </div>
 
-      {isLoading ? <LoadingState label="Carregando seus desafios…" /> : null}
+      {isLoading ? <ChallengeListSkeleton /> : null}
       {isError ? <ErrorState message="Não foi possível carregar seus desafios." onRetry={() => void refetch()} /> : null}
 
       {!isLoading && !isError && profile?.challenges.length === 0 ? (

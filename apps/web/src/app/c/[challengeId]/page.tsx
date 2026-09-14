@@ -1,13 +1,13 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowRight, ClipboardCheck, Settings2, Trophy } from "lucide-react";
+import { ArrowRight, Settings2, Trophy } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { ChallengeFeed } from "@/components/challenge/challenge-feed";
 import { ChallengeResult } from "@/components/challenge/challenge-result";
+import { DashboardSkeleton } from "@/components/dashboard/dashboard-skeleton";
 import { HeroStat } from "@/components/dashboard/hero-stat";
-import { CheckInModal } from "@/components/goals/check-in-modal";
 import { GoalSummaryRow } from "@/components/goals/goal-summary-row";
 import { PeriodGoalModal } from "@/components/goals/period-goal-modal";
 import { PodiumCard } from "@/components/ranking/podium-card";
@@ -15,7 +15,6 @@ import { PushToggle } from "@/components/settings/push-toggle";
 import { RankingList } from "@/components/ranking/ranking-list";
 import { StreakFlame } from "@/components/streak/streak-flame";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { ErrorState, LoadingState } from "@/components/ui/feedback";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import { Surface } from "@/components/ui/surface";
@@ -23,42 +22,59 @@ import { listGoals } from "@/lib/api/goals";
 import { getRanking } from "@/lib/api/ranking";
 import { getTodayState } from "@/lib/api/records";
 import { getStreak } from "@/lib/api/streak";
-import type { Goal, GoalPeriod, RecordEntry, TodayState } from "@/lib/api/types";
+import type { Goal, GoalPeriod, RecordEntry } from "@/lib/api/types";
 import { useChallenge } from "@/lib/challenge/challenge-context";
 import { useStreakFeedback } from "@/lib/challenge/use-streak-feedback";
-import { cn } from "@/lib/cn";
 import { daysBetween, formatDate, todayInSaoPaulo } from "@/lib/format/format";
 
 export default function DashboardPage() {
-  const { participation } = useChallenge();
+  const { participation, dashboardBundle } = useChallenge();
   const participantId = participation?.participantId;
   const challengeId = participation?.challengeId;
   const queryClient = useQueryClient();
-  const [checkInOpen, setCheckInOpen] = useState(false);
-  // Meta de período sendo registrada (null = modal fechado). Fora do
-  // check-in de propósito — ver period-goal-modal.tsx.
-  const [periodGoal, setPeriodGoal] = useState<Goal | null>(null);
+  // Meta (de qualquer periodicidade, diária inclusive — regra revisada: o
+  // check-in único por dia foi revertido) sendo registrada agora. null =
+  // modal fechado. Ver period-goal-modal.tsx.
+  const [recordingGoal, setRecordingGoal] = useState<Goal | null>(null);
+
+  // `initialData` a partir do que ChallengeProvider já buscou junto do
+  // perfil (etapa de performance — CLAUDE.md não muda): goals sempre vêm
+  // de brinde em qualquer participação; today/streak/ranking só quando
+  // este é o desafio padrão (dashboardBundle), o único que o backend
+  // calcula de antemão. `staleTime` curto evita um refetch imediato
+  // silencioso jogando fora essa economia, sem enfraquecer as invalidações
+  // explícitas (check-in, entrar/sair) — invalidateQueries sempre refaz a
+  // busca na hora, independente de staleTime.
+  const matchedBundle = dashboardBundle && dashboardBundle.participantId === participantId ? dashboardBundle : undefined;
 
   const goalsQuery = useQuery({
     queryKey: ["goals", participantId],
     queryFn: () => listGoals(participantId!),
     enabled: !!participantId,
+    initialData: participation?.goals,
+    staleTime: 15_000,
   });
   const todayQuery = useQuery({
     queryKey: ["today", participantId],
     queryFn: () => getTodayState(participantId!),
     enabled: !!participantId,
+    initialData: matchedBundle?.today,
+    staleTime: 15_000,
   });
   const streakQuery = useQuery({
     queryKey: ["streak", participantId],
     queryFn: () => getStreak(participantId!),
     enabled: !!participantId,
+    initialData: matchedBundle?.streak,
+    staleTime: 15_000,
     refetchInterval: 60_000,
   });
   const rankingQuery = useQuery({
     queryKey: ["ranking", challengeId],
     queryFn: () => getRanking(challengeId!),
     enabled: !!challengeId,
+    initialData: matchedBundle?.ranking,
+    staleTime: 15_000,
   });
 
   useStreakFeedback(
@@ -73,7 +89,7 @@ export default function DashboardPage() {
   );
 
   if (!participation || goalsQuery.isLoading || todayQuery.isLoading || streakQuery.isLoading) {
-    return <LoadingState label="Carregando seu painel…" />;
+    return <DashboardSkeleton />;
   }
 
   if (goalsQuery.isError || todayQuery.isError || streakQuery.isError) {
@@ -89,12 +105,12 @@ export default function DashboardPage() {
 
   const today = todayQuery.data!;
   const streak = streakQuery.data!;
+  // Reflete o progresso reativo do dia (day_results.completed_goals_count),
+  // atualizado a cada registro — não é mais um estado "tentativo" que só um
+  // check-in decidiria (regra revisada: check-in único por dia foi
+  // revertido, streak/pontos reagem em tempo real).
   const completedToday = streak.today?.completedGoalsCount ?? 0;
   const dailyConfigured = daily.length >= 3;
-  // Só o check_in_daily_period (instantâneo) ou o job noturno de quem não
-  // fez check-in marcam closed=true para hoje — nos dois casos o dia já
-  // está decidido, então o botão de check-in some até amanhã.
-  const checkedInToday = streak.today?.closed ?? false;
 
   // Desafio pode ser criado com start_date no futuro (ex.: combinar com os
   // amigos de começar só na segunda) — RecordsService já rejeita qualquer
@@ -140,19 +156,8 @@ export default function DashboardPage() {
     void queryClient.invalidateQueries({ queryKey: ["ranking", challengeId] });
   }
 
-  // O check-in diário já fecha o dia no servidor (streak/pontos
-  // instantâneos) — troca o "hoje" pelo estado fresco devolvido pelo
-  // próprio check-in, e invalida streak/ranking pra refletir o
-  // fechamento (currentStreak, totalPoints e a posição no ranking podem
-  // ter mudado).
-  function handleDailyCheckedIn(freshToday: TodayState) {
-    queryClient.setQueryData(["today", participantId], freshToday);
-    void queryClient.invalidateQueries({ queryKey: ["streak", participantId] });
-    void queryClient.invalidateQueries({ queryKey: ["ranking", challengeId] });
-  }
-
   return (
-    <div className={cn("flex flex-col gap-8", dailyConfigured && hasStarted && !hasEnded && !checkedInToday && "pb-16 sm:pb-0")}>
+    <div className="flex flex-col gap-8">
       <Surface className="grid grid-cols-2 gap-6 p-6 sm:grid-cols-4">
         <HeroStat label="Streak atual" value={<StreakFlame value={streak.currentStreak} size="lg" />} hint={`recorde: ${streak.longestStreak}`} />
         <HeroStat label="Pontos" value={participation.totalPoints} hint="total no desafio" />
@@ -174,7 +179,7 @@ export default function DashboardPage() {
 
       {rankingQuery.data && rankingQuery.data.length > 0 ? <PodiumCard entries={rankingQuery.data} /> : null}
 
-      {hasStarted && !checkedInToday ? <PushToggle /> : null}
+      {hasStarted ? <PushToggle /> : null}
 
       <section>
         <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
@@ -200,23 +205,7 @@ export default function DashboardPage() {
             <Badge tone="neutral" className="shrink-0 sm:self-start">
               Ainda não começou
             </Badge>
-          ) : checkedInToday ? (
-            <Badge tone="success" className="shrink-0 sm:self-start">
-              <ClipboardCheck className="size-3.5" aria-hidden />
-              Check-in de hoje concluído
-            </Badge>
-          ) : (
-            // Em mobile quem assume é a barra fixa na zona do polegar (fim
-            // deste arquivo) — o wrapper esconde este botão em vez de uma
-            // classe `hidden` no próprio Button, porque `cn` é clsx puro
-            // (sem tailwind-merge) e o `inline-flex` da base venceria.
-            <div className="hidden shrink-0 sm:block sm:self-start">
-              <Button size="sm" onClick={() => setCheckInOpen(true)}>
-                <ClipboardCheck className="size-4" aria-hidden />
-                Fazer check-in
-              </Button>
-            </div>
-          )}
+          ) : null}
         </div>
         {hasStarted ? (
           <ProgressBar value={(completedToday / 3) * 100} tone={completedToday === 3 ? "success" : "accent"} className="mb-4" />
@@ -229,12 +218,17 @@ export default function DashboardPage() {
         ) : !hasStarted ? (
           <Surface className="p-5 text-sm text-ink-muted">
             Esse desafio começa {daysUntilStart === 1 ? "amanhã" : `em ${daysUntilStart} dias`}, no dia{" "}
-            {formatDate(participation.startDate)} — o check-in libera a partir daí. Suas metas já estão configuradas.
+            {formatDate(participation.startDate)} — dá pra registrar a partir daí. Suas metas já estão configuradas.
           </Surface>
         ) : (
           <div className="flex flex-col gap-2">
             {daily.map((goal) => (
-              <GoalSummaryRow key={goal.id} goal={goal} record={recordsByGoalId.get(goal.id)} />
+              <GoalSummaryRow
+                key={goal.id}
+                goal={goal}
+                record={recordsByGoalId.get(goal.id)}
+                onRecord={() => setRecordingGoal(goal)}
+              />
             ))}
           </div>
         )}
@@ -264,7 +258,7 @@ export default function DashboardPage() {
                   key={goal.id}
                   goal={goal}
                   record={recordsByGoalId.get(goal.id)}
-                  onRecord={hasStarted && !hasEnded ? () => setPeriodGoal(goal) : undefined}
+                  onRecord={hasStarted && !hasEnded ? () => setRecordingGoal(goal) : undefined}
                 />
               ))}
             </div>
@@ -289,36 +283,10 @@ export default function DashboardPage() {
         </section>
       </div>
 
-      {dailyConfigured && hasStarted && !hasEnded && !checkedInToday ? (
-        <CheckInModal
-          open={checkInOpen}
-          onOpenChange={setCheckInOpen}
-          participantId={participantId!}
-          goals={daily}
-          recordsByGoalId={recordsByGoalId}
-          currentStreak={streak.currentStreak}
-          onDailyCheckedIn={handleDailyCheckedIn}
-        />
-      ) : null}
-
-      {/* Em mobile, a ação primária do produto ficava no topo da tela — a
-          região mais difícil de alcançar com o polegar — e abaixo da dobra
-          depois de 4 stats e do card de pódio. Esta barra fixa (acima da
-          BottomNavBar, respeitando a safe area) põe o check-in ao alcance
-          sem tirar o botão do seu lugar no fluxo em telas maiores. */}
-      {dailyConfigured && hasStarted && !hasEnded && !checkedInToday ? (
-        <div className="fixed inset-x-0 bottom-[calc(3.75rem+env(safe-area-inset-bottom))] z-20 border-t border-line bg-surface-0/95 px-4 py-3 backdrop-blur sm:hidden">
-          <Button onClick={() => setCheckInOpen(true)} className="w-full" size="lg">
-            <ClipboardCheck className="size-4" aria-hidden />
-            Fazer check-in · {completedToday}/3
-          </Button>
-        </div>
-      ) : null}
-
       <PeriodGoalModal
-        goal={periodGoal}
-        record={periodGoal ? recordsByGoalId.get(periodGoal.id) : undefined}
-        onOpenChange={(open) => !open && setPeriodGoal(null)}
+        goal={recordingGoal}
+        record={recordingGoal ? recordsByGoalId.get(recordingGoal.id) : undefined}
+        onOpenChange={(open) => !open && setRecordingGoal(null)}
         onRecorded={handleRecorded}
       />
     </div>

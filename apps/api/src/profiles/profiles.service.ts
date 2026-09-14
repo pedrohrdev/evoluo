@@ -1,6 +1,10 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { ParticipantStatus } from '@prisma/client';
 import { GoalsService } from '../goals/goals.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { RankingService } from '../ranking/ranking.service';
+import { RecordsService } from '../records/records.service';
+import { StreakService } from '../streak/streak.service';
 import { SupabaseService } from '../supabase/supabase.service';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 
@@ -19,6 +23,9 @@ export class ProfilesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly goalsService: GoalsService,
+    private readonly recordsService: RecordsService,
+    private readonly streakService: StreakService,
+    private readonly rankingService: RankingService,
     private readonly supabase: SupabaseService,
   ) {}
 
@@ -94,6 +101,61 @@ export class ProfilesService {
     }));
 
     return { ...profile, challenges };
+  }
+
+  // Bootstrap do painel do próprio usuário (onboarding -> /c/:id) numa
+  // única chamada: hoje o frontend precisava de 2 idas-e-voltas
+  // sequenciais (perfil, pra saber o desafio padrão, e só depois
+  // goals/today/streak/ranking desse desafio) — cada uma pagando o custo
+  // de Vercel -> Render -> Supabase. Aqui o segundo grupo já sai embutido
+  // pro desafio padrão, calculado com a MESMA regra do frontend
+  // (pickDefaultChallenge, lib/challenge/pick-default-challenge.ts —
+  // mantenha as duas em sincronia). Puramente uma otimização de leitura:
+  // nenhum dos 4 serviços chamados abaixo é duplicado, cada um continua
+  // sendo a única fonte da própria regra.
+  async getOwnDashboard(userId: string) {
+    const profile = await this.getPublicProfile(userId);
+    const defaultParticipation = this.pickDefaultChallenge(profile.challenges);
+
+    if (!defaultParticipation) {
+      return { ...profile, defaultChallenge: null };
+    }
+
+    const [today, streak, ranking] = await Promise.all([
+      this.recordsService.getTodayState(defaultParticipation.participantId),
+      this.streakService.getStreak(defaultParticipation.participantId),
+      this.rankingService.getRanking(defaultParticipation.challengeId),
+    ]);
+
+    return {
+      ...profile,
+      defaultChallenge: {
+        challengeId: defaultParticipation.challengeId,
+        participantId: defaultParticipation.participantId,
+        today,
+        streak,
+        ranking,
+      },
+    };
+  }
+
+  // Espelha exatamente pickDefaultChallenge do frontend
+  // (apps/web/src/lib/challenge/pick-default-challenge.ts): desafios
+  // ativos primeiro, depois o de check-in diário mais recente, ou o mais
+  // recém-entrado (challenges[0], já vem ordenado por joinedAt desc) se
+  // ninguém ainda fez check-in.
+  private pickDefaultChallenge<
+    T extends { status: ParticipantStatus; lastCheckInDate: Date | null },
+  >(challenges: T[]): T | undefined {
+    const active = challenges.filter((c) => c.status === ParticipantStatus.active);
+    if (active.length === 0) return undefined;
+
+    const withCheckIn = active.filter(
+      (c): c is T & { lastCheckInDate: Date } => c.lastCheckInDate !== null,
+    );
+    if (withCheckIn.length === 0) return active[0];
+
+    return withCheckIn.reduce((latest, c) => (c.lastCheckInDate > latest.lastCheckInDate ? c : latest));
   }
 
   async updateOwn(id: string, dto: UpdateProfileDto) {

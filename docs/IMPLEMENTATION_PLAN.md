@@ -131,3 +131,12 @@ Uma etapa só é marcada como `[x]` depois de implementada, testada, integrada a
   Comando: `npm run api:test:int`.
 
   **Itens da Fase 5 deliberadamente não feitos** (ver relatório final): verificação local do JWT no guard (P1-7) — mexe em autenticação de um app com usuários reais e não deve ser feita às pressas; paginação de histórico/ranking; recorte temporal em analytics.
+
+- [x] **28. Check-in único revertido para registro reativo**
+  Mudança de regra confirmada com o usuário: o check-in único por dia (etapa 24) foi revertido. Cada meta diária volta a ser um registro avulso por `goalId` — mesmo padrão de semanal/mensal/duração —, podendo ser feito e corrigido quantas vezes quiser ao longo do dia ("marcar algo agora, outra coisa depois").
+
+  Trade-off aceito explicitamente pelo usuário: como não existe mais "check-in que fecha o dia", streak e pontos passaram a ser decididos **de forma reativa, a cada registro** (trigger `reconcile_daily_period`, migration `20260914090000`, substituindo `upsert_day_result` e `check_in_daily_period`), podendo subir e descer no mesmo dia se uma correção derrubar o dia de 3/3 para menos — o mesmo risco de oscilação que a etapa 24 tinha eliminado de propósito. `close_daily_period` (job noturno) passou a só trancar quem já foi decidido reativamente durante o dia, sem recalcular streak de novo.
+
+  Backend: `RecordsController`/`RecordsService.recordCurrentDaily` substitui `checkInDaily` — `PUT /goals/:goalId/daily-record`, no lugar de `PUT /challenge-participants/:id/daily-check-in`. Frontend: `CheckInModal` removido; `PeriodGoalModal` (antes só semanal/mensal/duração) passou a atender também metas diárias, cada uma registrada a partir da própria linha em `GoalSummaryRow`. Removida a lógica de "esconder tudo depois do check-in" no dashboard (badge "check-in concluído", barra fixa mobile, segunda confirmação de perda de streak) — não existe mais um estado de "dia fechado" enquanto ainda é hoje.
+
+  Testes: 215 testes unitários (API) + 25 testes de integração contra Postgres real, incluindo os novos cenários de streak/pontos subindo, revertendo e re-creditando no mesmo dia, e o job noturno não duplicar o que já foi decidido reativamente. `npm run api:test` e `npm run api:test:int`.

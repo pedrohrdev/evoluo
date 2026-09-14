@@ -36,6 +36,15 @@ export class ProfilesController {
     return this.profilesService.findById(user.id);
   }
 
+  // Bootstrap combinado do painel próprio (ver ProfilesService.getOwnDashboard)
+  // — só faz sentido pra "me": embutir o desafio padrão de outra pessoa não
+  // tem consumidor no frontend (o perfil público de terceiros nunca mostra
+  // hoje/streak/ranking ao vivo, só os agregados já presentes em GET :id).
+  @Get('me/dashboard')
+  findOwnDashboard(@CurrentUser() user: AuthenticatedUser) {
+    return this.profilesService.getOwnDashboard(user.id);
+  }
+
   @Patch('me')
   updateOwn(@CurrentUser() user: AuthenticatedUser, @Body() dto: UpdateProfileDto) {
     return this.profilesService.updateOwn(user.id, dto);
