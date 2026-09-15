@@ -1,4 +1,4 @@
-import { Check, CircleDot, Pencil, Settings2 } from "lucide-react";
+import { Check, CircleDot, Settings2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Surface } from "@/components/ui/surface";
 import type { Goal, RecordEntry } from "@/lib/api/types";
@@ -47,74 +47,76 @@ export function GoalSummaryRow({
   const wasEdited = new Date(version.validFrom).getTime() - new Date(goal.createdAt).getTime() > 5_000;
 
   return (
-    <Surface
-      className={cn(
-        "flex items-center justify-between gap-4 p-4",
-        state === "completed" && "border-success/40 bg-success-soft",
-        state === "incomplete" && "border-accent/30 bg-accent-soft",
-      )}
-    >
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          {state === "completed" ? (
-            <Check className="size-4 shrink-0 text-success" aria-hidden />
-          ) : (
-            <CircleDot
-              className={cn("size-4 shrink-0", state === "incomplete" ? "text-accent" : "text-ink-faint")}
-              aria-hidden
-            />
-          )}
-          <p className="truncate font-medium text-ink">{version.title}</p>
+    <div className="flex flex-col gap-1.5">
+      <Surface
+        className={cn(
+          "flex items-center justify-between gap-4 p-4",
+          state === "completed" && "border-success/40 bg-success-soft",
+          state === "incomplete" && "border-accent/30 bg-accent-soft",
+        )}
+      >
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            {state === "completed" ? (
+              <Check className="size-4 shrink-0 text-success" aria-hidden />
+            ) : (
+              <CircleDot
+                className={cn("size-4 shrink-0", state === "incomplete" ? "text-accent" : "text-ink-faint")}
+                aria-hidden
+              />
+            )}
+            <p className="truncate font-medium text-ink">{version.title}</p>
+          </div>
+          <div className="mt-1 flex flex-wrap items-center gap-1.5 pl-6 text-xs text-ink-muted">
+            {periodLabel ? <Badge tone="accent">{periodLabel}</Badge> : null}
+            <Badge tone="neutral">{IMPORTANCE_LABEL[version.importance]}</Badge>
+            {wasEdited ? <GoalHistoryBadge goalId={goal.id} createdAt={version.validFrom} /> : null}
+            {version.kind !== "boolean" ? (
+              <span>
+                alvo: {formatValueForKind(version.kind, version.targetValue)}
+                {record ? ` · feito: ${formatValueForKind(version.kind, record.actualValue)}` : ""}
+              </span>
+            ) : null}
+          </div>
         </div>
-        <div className="mt-1 flex flex-wrap items-center gap-1.5 pl-6 text-xs text-ink-muted">
-          {periodLabel ? <Badge tone="accent">{periodLabel}</Badge> : null}
-          <Badge tone="neutral">{IMPORTANCE_LABEL[version.importance]}</Badge>
-          {wasEdited ? <GoalHistoryBadge goalId={goal.id} createdAt={version.validFrom} /> : null}
-          {version.kind !== "boolean" ? (
-            <span>
-              alvo: {formatValueForKind(version.kind, version.targetValue)}
-              {record ? ` · feito: ${formatValueForKind(version.kind, record.actualValue)}` : ""}
-            </span>
+
+        <div className="flex shrink-0 items-center gap-2">
+          <div className="text-right text-xs text-ink-muted">
+            <p className="font-medium text-ink">
+              {!record
+                ? onRecord
+                  ? "Sem registro"
+                  : "Sem registro hoje"
+                : version.kind === "boolean"
+                  ? record.actualBoolean
+                    ? "Feito"
+                    : "Não feito"
+                  : record.completed
+                    ? "Concluída"
+                    : "Abaixo do alvo"}
+            </p>
+            {record ? <p>{record.pointsAwarded > 0 ? `+${record.pointsAwarded} pts` : "0 pts"}</p> : null}
+          </div>
+          {onEdit ? (
+            <button
+              onClick={onEdit}
+              className="rounded-sm p-2 text-ink-faint transition-colors hover:bg-surface-3 hover:text-ink"
+              aria-label={`Editar ${version.title}`}
+            >
+              <Settings2 className="size-4" aria-hidden />
+            </button>
           ) : null}
         </div>
-      </div>
+      </Surface>
 
-      <div className="flex shrink-0 items-center gap-2">
-        <div className="text-right text-xs text-ink-muted">
-          <p className="font-medium text-ink">
-            {!record
-              ? onRecord
-                ? "Sem registro"
-                : "Sem registro hoje"
-              : version.kind === "boolean"
-                ? record.actualBoolean
-                  ? "Feito"
-                  : "Não feito"
-                : record.completed
-                  ? "Concluída"
-                  : "Abaixo do alvo"}
-          </p>
-          {record ? <p>{record.pointsAwarded > 0 ? `+${record.pointsAwarded} pts` : "0 pts"}</p> : null}
-        </div>
-        {onEdit ? (
-          <button
-            onClick={onEdit}
-            className="rounded-sm p-2 text-ink-faint transition-colors hover:bg-surface-3 hover:text-ink"
-            aria-label={`Editar ${version.title}`}
-          >
-            <Settings2 className="size-4" aria-hidden />
-          </button>
-        ) : null}
-        {onRecord ? (
-          <button
-            onClick={onRecord}
-            className="rounded-sm p-2 text-ink-faint transition-colors hover:bg-surface-3 hover:text-ink"
-            aria-label={`Registrar ${version.title}`}
-          >
-            <Pencil className="size-4" aria-hidden />
-          </button>
-        ) : null}
-      </div>
-    </Surface>
+      {onRecord ? (
+        <button
+          onClick={onRecord}
+          className="rounded-sm bg-surface-2 py-1.5 text-center text-xs font-medium text-ink-muted transition-colors hover:bg-surface-3 hover:text-ink"
+        >
+          Editar o que fez hoje
+        </button>
+      ) : null}
+    </div>
   );
 }
