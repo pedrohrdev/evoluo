@@ -143,18 +143,9 @@ Perfis são **públicos** para qualquer usuário autenticado no aplicativo, mesm
 - **Editar uma meta vale imediatamente, inclusive para o dia em curso.** Decisão confirmada com o usuário (etapa 25): se a pessoa troca de meta de manhã, ela tem que poder cumprir essa meta nova no mesmo dia — compromissos aparecem e ideias mudam, e travar a edição até o dia seguinte puniria o uso honesto, que é a maioria. A contrapartida contra ajuste oportunista não é uma trava, é **visibilidade**: toda meta editada exibe "editada há N dias" com a linha do tempo de versões aberta a qualquer participante (`GET /goals/:goalId/versions`). O versionamento `Goal`/`GoalVersion` continua garantindo que registros já gravados nunca mudem.
 - O **código de convite não é público**: `GET /challenges/:id` (leitura aberta a qualquer autenticado) não o devolve. Quem participa lê em `GET /challenges/:id/join-code`. O id do desafio aparece no perfil público de qualquer participante, então expor o código junto com ele anularia o próprio controle de acesso de entrada.
 
-### Metas especiais entre participantes
+### Metas especiais entre participantes (removida)
 
-Decisão de negócio confirmada com o usuário na etapa 22 (fora do modelo de metas das seções acima — não é uma 5ª categoria de `Goal`/`GoalVersion`, é sua própria entidade):
-
-- Qualquer participante de um desafio pode atribuir uma **meta especial** a outro participante do **mesmo desafio**.
-- Aplicada direto, **sem aceite** do alvo.
-- Sempre do tipo **sim/não** (cumpriu ou não) — nunca horas/quantidade.
-- **Sem prazo fixo**: pode ser cumprida a qualquer momento, não é presa a um dia/semana/mês/duração do desafio.
-- **Puramente social**: nunca gera pontos, nunca conta para streak, nunca entra em nenhum critério de ranking.
-- Quem criou pode **cancelar** enquanto ainda estiver pendente. Só o alvo pode marcá-la como **cumprida**. Depois de cumprida ou cancelada, é definitiva (sem reabrir, sem editar).
-- Sem limite de metas especiais simultâneas por participante (nem enviadas, nem recebidas).
-- **Pública dentro do desafio**, como as demais metas/histórico (seção "Perfis" acima).
+A funcionalidade "Entre amigos" (atribuir uma meta especial sim/não a outro participante do mesmo desafio, decidida na etapa 22) foi **removida** a pedido do usuário: UI (nav, página, modais) e o módulo `SpecialGoals` do backend (controller/service/rotas) não existem mais no código, incluindo a menção a metas especiais no feed do desafio (`FeedService`). A tabela `special_goals` **continua existindo no banco**, intacta e com qualquer dado antigo preservado — decisão explícita de não fazer uma migration destrutiva para apagá-la —, só não é mais lida nem escrita por nenhum módulo da aplicação. Não recriar esta funcionalidade sem confirmação explícita do usuário.
 
 ## 3. Stack e arquitetura (resumo — detalhes em `docs/arquitetura-tecnica.md`)
 
@@ -164,7 +155,7 @@ Decisão de negócio confirmada com o usuário na etapa 22 (fora do modelo de me
 - ORM: Prisma.
 - Frontend: Next.js (App Router).
 - Autenticação: Supabase Auth.
-- Módulos do backend: Challenges, Participants, Goals, Records (Daily/Weekly/Monthly/Duration), Day Evaluation, Scoring, Streak, Ranking, Analytics, SpecialGoals.
+- Módulos do backend: Challenges, Participants, Goals, Records (Daily/Weekly/Monthly/Duration), Day Evaluation, Scoring, Streak, Ranking, Analytics, Feed. (Módulo `SpecialGoals` removido — ver seção 2 "Metas especiais entre participantes (removida)".)
 
 A camada de banco de dados (etapa 2 do plano) já está implementada e testada — ver `docs/database-schema.md` para o schema completo, incluindo RLS, triggers e jobs de fechamento.
 

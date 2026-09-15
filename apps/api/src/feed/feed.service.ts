@@ -1,19 +1,15 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { ParticipantStatus, SpecialGoalStatus } from '@prisma/client';
+import { ParticipantStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
-export type FeedEventType = 'day_completed' | 'day_missed' | 'special_goal_created' | 'special_goal_resolved';
+export type FeedEventType = 'day_completed' | 'day_missed';
 
 export interface FeedEvent {
   type: FeedEventType;
   at: Date;
   actorUserId: string;
   actorName: string;
-  /** Preenchido só em eventos que envolvem duas pessoas (metas especiais). */
-  targetName?: string;
   streak?: number;
-  title?: string;
-  status?: SpecialGoalStatus;
 }
 
 const DEFAULT_LIMIT = 30;
@@ -24,7 +20,7 @@ const DEFAULT_LIMIT = 30;
  * Entre um check-in e o próximo, o produto ficava inerte por 24h: os amigos
  * registravam metas, o ranking mudava, e nada disso aparecia para ninguém.
  * Este módulo não cria nenhum dado novo — só lê o que já existe
- * (`day_results`, `special_goals`) e ordena por tempo.
+ * (`day_results`) e ordena por tempo.
  *
  * Deliberadamente sem tabela própria: um feed materializado exigiria manter
  * escrita em duas fontes e reprocessar histórico. Enquanto o volume for de
@@ -75,39 +71,22 @@ export class FeedService {
     // job noturno não cria mais day_results anteriores ao início
     // (migration 20260912090000), mas linhas gravadas antes dessa correção
     // continuam no banco — filtrar na leitura cobre as duas pontas.
-    const [dayResults, specialGoals] = await Promise.all([
-      this.prisma.dayResult.findMany({
-        where: {
-          challengeParticipantId: { in: participantIds },
-          closed: true,
-          resultDate: { gte: challenge.startDate },
-        },
-        orderBy: { resultDate: 'desc' },
-        take: limit,
-        select: {
-          challengeParticipantId: true,
-          resultDate: true,
-          dayCompleted: true,
-          streakAfter: true,
-          updatedAt: true,
-        },
-      }),
-      this.prisma.specialGoal.findMany({
-        where: { challengeId },
-        orderBy: { createdAt: 'desc' },
-        take: limit,
-        select: {
-          fromParticipantId: true,
-          toParticipantId: true,
-          title: true,
-          status: true,
-          createdAt: true,
-          completedAt: true,
-          cancelledAt: true,
-          declinedAt: true,
-        },
-      }),
-    ]);
+    const dayResults = await this.prisma.dayResult.findMany({
+      where: {
+        challengeParticipantId: { in: participantIds },
+        closed: true,
+        resultDate: { gte: challenge.startDate },
+      },
+      orderBy: { resultDate: 'desc' },
+      take: limit,
+      select: {
+        challengeParticipantId: true,
+        resultDate: true,
+        dayCompleted: true,
+        streakAfter: true,
+        updatedAt: true,
+      },
+    });
 
     const events: FeedEvent[] = [];
 
@@ -120,35 +99,6 @@ export class FeedService {
         actorName: nameOf(day.challengeParticipantId),
         streak: day.streakAfter ?? 0,
       });
-    }
-
-    for (const goal of specialGoals) {
-      events.push({
-        type: 'special_goal_created',
-        at: goal.createdAt,
-        actorUserId: userIdByParticipant.get(goal.fromParticipantId) ?? '',
-        actorName: nameOf(goal.fromParticipantId),
-        targetName: nameOf(goal.toParticipantId),
-        title: goal.title,
-        status: SpecialGoalStatus.pending,
-      });
-
-      // Uma meta resolvida rende DOIS eventos: quando foi criada e quando
-      // foi resolvida — são momentos distintos da conversa entre os dois.
-      const resolvedAt = goal.completedAt ?? goal.declinedAt ?? goal.cancelledAt;
-      if (goal.status !== SpecialGoalStatus.pending && resolvedAt) {
-        const resolvedByCreator = goal.status === SpecialGoalStatus.cancelled;
-        const actorId = resolvedByCreator ? goal.fromParticipantId : goal.toParticipantId;
-        events.push({
-          type: 'special_goal_resolved',
-          at: resolvedAt,
-          actorUserId: userIdByParticipant.get(actorId) ?? '',
-          actorName: nameOf(actorId),
-          targetName: nameOf(resolvedByCreator ? goal.toParticipantId : goal.fromParticipantId),
-          title: goal.title,
-          status: goal.status,
-        });
-      }
     }
 
     return events.sort((a, b) => b.at.getTime() - a.at.getTime()).slice(0, limit);

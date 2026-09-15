@@ -5,8 +5,6 @@ export type GoalPeriod = "daily" | "weekly" | "monthly" | "challenge";
 export type GoalKind = "hours" | "quantity" | "boolean";
 export type Importance = "low" | "medium" | "high";
 export type ParticipantStatus = "active" | "inactive";
-// `declined`: o alvo pode recusar, não só cumprir (etapa 26).
-export type SpecialGoalStatus = "pending" | "completed" | "cancelled" | "declined";
 
 // Sem joinCode de propósito: o código é o único controle de acesso de
 // entrada no desafio e o id do desafio é público (aparece no perfil de
@@ -194,22 +192,6 @@ export interface GoalAnalytics extends Goal {
   byKind: KindAggregate[];
 }
 
-// Tarefa avulsa entre dois participantes do mesmo desafio — sempre
-// sim/não, sem prazo, puramente social (nunca gera pontos nem afeta
-// streak/ranking). Ver CLAUDE.md seção 2 "Outras regras já confirmadas".
-export interface SpecialGoal {
-  id: string;
-  challengeId: string;
-  fromParticipantId: string;
-  toParticipantId: string;
-  title: string;
-  status: SpecialGoalStatus;
-  completedAt: string | null;
-  cancelledAt: string | null;
-  declinedAt: string | null;
-  createdAt: string;
-}
-
 export interface TodayState {
   daily: RecordEntry[];
   weekly: RecordEntry[];
@@ -217,19 +199,16 @@ export interface TodayState {
   challenge: RecordEntry[];
 }
 
-// Evento do feed do desafio. Derivado de day_results e special_goals — não
-// existe tabela de feed (ver FeedService no backend).
-export type FeedEventType = "day_completed" | "day_missed" | "special_goal_created" | "special_goal_resolved";
+// Evento do feed do desafio. Derivado de day_results — não existe tabela de
+// feed (ver FeedService no backend).
+export type FeedEventType = "day_completed" | "day_missed";
 
 export interface FeedEvent {
   type: FeedEventType;
   at: string;
   actorUserId: string;
   actorName: string;
-  targetName?: string;
   streak?: number;
-  title?: string;
-  status?: SpecialGoalStatus;
 }
 
 export interface DaySeriesEntry {

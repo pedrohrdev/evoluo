@@ -21,3 +21,19 @@ export const GOAL_PERIOD_LABEL: Record<GoalPeriod, string> = {
   monthly: "Mensal",
   challenge: "Duração",
 };
+
+// Rótulo por extenso pra identificar de cara, na seção "Metas de período",
+// qual das três é qual (semanal/mensal/duração) — a de duração é dinâmica
+// porque o desafio pode durar 30, 50, 100 ou 365 dias.
+export function goalPeriodDisplayLabel(periodType: GoalPeriod, challengeDurationDays?: number): string {
+  switch (periodType) {
+    case "daily":
+      return "Meta diária";
+    case "weekly":
+      return "Meta semanal";
+    case "monthly":
+      return "Meta mensal";
+    case "challenge":
+      return challengeDurationDays ? `Meta pros ${challengeDurationDays} dias` : "Meta do desafio";
+  }
+}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { Flame, Gift, MinusCircle } from "lucide-react";
+import { Flame, MinusCircle } from "lucide-react";
 import { getChallengeFeed } from "@/lib/api/feed";
 import type { FeedEvent } from "@/lib/api/types";
 import { EmptyState } from "@/components/ui/feedback";
@@ -18,54 +18,27 @@ function relativeTime(iso: string): string {
   return days === 1 ? "ontem" : `${days} dias`;
 }
 
-const RESOLVED_LABEL: Record<string, string> = {
-  completed: "cumpriu",
-  declined: "recusou",
-  cancelled: "cancelou",
-};
-
 function describe(event: FeedEvent): { icon: typeof Flame; text: React.ReactNode } {
-  switch (event.type) {
-    case "day_completed":
-      return {
-        icon: Flame,
-        text: (
-          <>
-            <strong className="font-medium text-ink">{event.actorName}</strong> fechou 3/3
-            {event.streak ? ` · ${pluralize(event.streak, "dia seguido", "dias seguidos")}` : ""}
-          </>
-        ),
-      };
-    case "day_missed":
-      return {
-        icon: MinusCircle,
-        text: (
-          <>
-            <strong className="font-medium text-ink">{event.actorName}</strong> não fechou o dia
-          </>
-        ),
-      };
-    case "special_goal_created":
-      return {
-        icon: Gift,
-        text: (
-          <>
-            <strong className="font-medium text-ink">{event.actorName}</strong> mandou uma meta especial para{" "}
-            <strong className="font-medium text-ink">{event.targetName}</strong>: {event.title}
-          </>
-        ),
-      };
-    default:
-      return {
-        icon: Gift,
-        text: (
-          <>
-            <strong className="font-medium text-ink">{event.actorName}</strong>{" "}
-            {RESOLVED_LABEL[event.status ?? ""] ?? "resolveu"} a meta especial: {event.title}
-          </>
-        ),
-      };
+  if (event.type === "day_completed") {
+    return {
+      icon: Flame,
+      text: (
+        <>
+          <strong className="font-medium text-ink">{event.actorName}</strong> fechou 3/3
+          {event.streak ? ` · ${pluralize(event.streak, "dia seguido", "dias seguidos")}` : ""}
+        </>
+      ),
+    };
   }
+
+  return {
+    icon: MinusCircle,
+    text: (
+      <>
+        <strong className="font-medium text-ink">{event.actorName}</strong> não fechou o dia
+      </>
+    ),
+  };
 }
 
 // Feed de atividade do desafio.
@@ -113,7 +86,5 @@ export function ChallengeFeed({ challengeId }: { challengeId: string }) {
 
 function cnIcon(type: FeedEvent["type"]): string {
   const base = "mt-0.5 size-4 shrink-0 ";
-  if (type === "day_completed") return `${base}text-accent`;
-  if (type === "day_missed") return `${base}text-ink-faint`;
-  return `${base}text-ink-muted`;
+  return type === "day_completed" ? `${base}text-accent` : `${base}text-ink-faint`;
 }

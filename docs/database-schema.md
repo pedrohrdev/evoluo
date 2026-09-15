@@ -77,7 +77,7 @@ points_config (tabela de referência, sem FK — lookup por importance+period_ty
 | `day_results` | Um por participante por dia: quantas das 3 diárias foram cumpridas, se o dia fechou, streak resultante. |
 | `points_ledger` | Lançamento append-only de pontos — a trilha de auditoria de onde veio cada ponto. |
 | `points_config` | Tabela de configuração: pontos por `importance` × `period_type`. |
-| `special_goals` | Etapa 22: tarefa avulsa entre dois participantes do mesmo desafio (`from_participant_id` → `to_participant_id`), sempre sim/não, sem período. Fora do par `goals`/`goal_versions` — não referencia nenhuma das duas, e nenhuma tabela de Scoring/Streak/Ranking a referencia de volta. |
+| `special_goals` | Etapa 22: tarefa avulsa entre dois participantes do mesmo desafio (`from_participant_id` → `to_participant_id`), sempre sim/não, sem período. Fora do par `goals`/`goal_versions` — não referencia nenhuma das duas, e nenhuma tabela de Scoring/Streak/Ranking a referencia de volta. **Funcionalidade removida da aplicação** (módulo `SpecialGoals` e UI "Entre amigos" — ver `CLAUDE.md` seção 2): tabela, triggers e RLS abaixo continuam existindo no banco tal como implementados, só não são mais lidos/escritos por nenhum código. |
 
 ## Constraints principais
 
