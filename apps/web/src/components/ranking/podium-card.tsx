@@ -1,7 +1,6 @@
 import { Medal } from "lucide-react";
 import Link from "next/link";
 import { Avatar } from "@/components/profile/avatar";
-import { Surface } from "@/components/ui/surface";
 import type { RankingEntry } from "@/lib/api/types";
 import { cn } from "@/lib/cn";
 

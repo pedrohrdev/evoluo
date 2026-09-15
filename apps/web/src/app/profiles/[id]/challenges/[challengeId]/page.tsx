@@ -89,7 +89,14 @@ export default function ProfileChallengeDashboardPage() {
               const source = { weekly: today.weekly, monthly: today.monthly, challenge: today.challenge }[
                 goal.periodType as "weekly" | "monthly" | "challenge"
               ];
-              return <GoalSummaryRow key={goal.id} goal={goal} record={findRecord(source, goal.id)} />;
+              return (
+                <GoalSummaryRow
+                  key={goal.id}
+                  goal={goal}
+                  record={findRecord(source, goal.id)}
+                  challengeDurationDays={participation!.durationDays}
+                />
+              );
             })}
           </div>
         </section>

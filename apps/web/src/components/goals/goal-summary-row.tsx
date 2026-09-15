@@ -1,9 +1,9 @@
-import { Check, CircleDot, Pencil } from "lucide-react";
+import { Check, CircleDot, Pencil, Settings2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Surface } from "@/components/ui/surface";
 import type { Goal, RecordEntry } from "@/lib/api/types";
 import { cn } from "@/lib/cn";
-import { IMPORTANCE_LABEL } from "@/lib/domain/labels";
+import { goalPeriodDisplayLabel, IMPORTANCE_LABEL } from "@/lib/domain/labels";
 import { formatValueForKind } from "@/lib/format/format";
 import { GoalHistoryBadge } from "./goal-history-badge";
 
@@ -24,15 +24,22 @@ export function GoalSummaryRow({
   goal,
   record,
   onRecord,
+  onEdit,
+  challengeDurationDays,
 }: {
   goal: Goal;
   record: RecordEntry | undefined;
   onRecord?: () => void;
+  /** Abre a edição da meta (título/tipo/alvo/importância) — diferente de `onRecord`, que só lança um valor. */
+  onEdit?: () => void;
+  /** Só usado pro rótulo da meta de duração ("Meta pros N dias"). */
+  challengeDurationDays?: number;
 }) {
   const version = goal.currentVersion;
   if (!version) return null;
 
   const state = stateOf(record);
+  const periodLabel = goal.periodType === "daily" ? null : goalPeriodDisplayLabel(goal.periodType, challengeDurationDays);
 
   // A primeira versão nasce na mesma transação da meta (GoalsService.create),
   // então uma vigência que começou bem depois da criação só pode ter vindo
@@ -60,6 +67,7 @@ export function GoalSummaryRow({
           <p className="truncate font-medium text-ink">{version.title}</p>
         </div>
         <div className="mt-1 flex flex-wrap items-center gap-1.5 pl-6 text-xs text-ink-muted">
+          {periodLabel ? <Badge tone="accent">{periodLabel}</Badge> : null}
           <Badge tone="neutral">{IMPORTANCE_LABEL[version.importance]}</Badge>
           {wasEdited ? <GoalHistoryBadge goalId={goal.id} createdAt={version.validFrom} /> : null}
           {version.kind !== "boolean" ? (
@@ -88,6 +96,15 @@ export function GoalSummaryRow({
           </p>
           {record ? <p>{record.pointsAwarded > 0 ? `+${record.pointsAwarded} pts` : "0 pts"}</p> : null}
         </div>
+        {onEdit ? (
+          <button
+            onClick={onEdit}
+            className="rounded-sm p-2 text-ink-faint transition-colors hover:bg-surface-3 hover:text-ink"
+            aria-label={`Editar ${version.title}`}
+          >
+            <Settings2 className="size-4" aria-hidden />
+          </button>
+        ) : null}
         {onRecord ? (
           <button
             onClick={onRecord}

@@ -8,6 +8,7 @@ import { ChallengeFeed } from "@/components/challenge/challenge-feed";
 import { ChallengeResult } from "@/components/challenge/challenge-result";
 import { DashboardSkeleton } from "@/components/dashboard/dashboard-skeleton";
 import { HeroStat } from "@/components/dashboard/hero-stat";
+import { GoalFormModal } from "@/components/goals/goal-form-modal";
 import { GoalSummaryRow } from "@/components/goals/goal-summary-row";
 import { PeriodGoalModal } from "@/components/goals/period-goal-modal";
 import { PodiumCard } from "@/components/ranking/podium-card";
@@ -35,6 +36,9 @@ export default function DashboardPage() {
   // check-in único por dia foi revertido) sendo registrada agora. null =
   // modal fechado. Ver period-goal-modal.tsx.
   const [recordingGoal, setRecordingGoal] = useState<Goal | null>(null);
+  // Meta sendo editada (título/tipo/alvo/importância) — diferente de
+  // recordingGoal, que só lança um valor do dia. Ver goal-form-modal.tsx.
+  const [editingGoal, setEditingGoal] = useState<Goal | null>(null);
 
   // `initialData` a partir do que ChallengeProvider já buscou junto do
   // perfil (etapa de performance — CLAUDE.md não muda): goals sempre vêm
@@ -155,6 +159,10 @@ export default function DashboardPage() {
     void queryClient.invalidateQueries({ queryKey: ["ranking", challengeId] });
   }
 
+  function handleGoalSaved() {
+    void queryClient.invalidateQueries({ queryKey: ["goals", participantId] });
+  }
+
   return (
     <div className="flex flex-col gap-8">
       <Surface className="grid grid-cols-2 gap-6 p-6 sm:grid-cols-4">
@@ -200,11 +208,18 @@ export default function DashboardPage() {
               <Settings2 className="size-4" aria-hidden />
               Configurar metas diárias
             </Link>
-          ) : !hasStarted ? (
-            <Badge tone="neutral" className="shrink-0 sm:self-start">
-              Ainda não começou
-            </Badge>
-          ) : null}
+          ) : (
+            <div className="flex shrink-0 items-center gap-3 sm:self-start">
+              {!hasStarted ? <Badge tone="neutral">Ainda não começou</Badge> : null}
+              <Link
+                href={`/c/${challengeId}/setup`}
+                className="inline-flex items-center gap-1.5 text-sm font-medium text-ink-muted hover:text-ink"
+              >
+                <Settings2 className="size-4" aria-hidden />
+                editar
+              </Link>
+            </div>
+          )}
         </div>
         {hasStarted ? (
           <ProgressBar value={(completedToday / 3) * 100} tone={completedToday === 3 ? "success" : "accent"} className="mb-4" />
@@ -227,6 +242,7 @@ export default function DashboardPage() {
                 goal={goal}
                 record={recordsByGoalId.get(goal.id)}
                 onRecord={() => setRecordingGoal(goal)}
+                onEdit={() => setEditingGoal(goal)}
               />
             ))}
           </div>
@@ -257,6 +273,8 @@ export default function DashboardPage() {
                 goal={goal}
                 record={recordsByGoalId.get(goal.id)}
                 onRecord={hasStarted && !hasEnded ? () => setRecordingGoal(goal) : undefined}
+                onEdit={() => setEditingGoal(goal)}
+                challengeDurationDays={participation.durationDays}
               />
             ))}
           </div>
@@ -269,6 +287,17 @@ export default function DashboardPage() {
         onOpenChange={(open) => !open && setRecordingGoal(null)}
         onRecorded={handleRecorded}
       />
+
+      {editingGoal ? (
+        <GoalFormModal
+          open
+          onOpenChange={(open) => !open && setEditingGoal(null)}
+          participantId={participantId!}
+          periodType={editingGoal.periodType}
+          existingGoal={editingGoal}
+          onSaved={handleGoalSaved}
+        />
+      ) : null}
     </div>
   );
 }
